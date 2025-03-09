@@ -83,18 +83,47 @@ const MathUtil: React.FC = () => {
       message.error("请输入有效的整数范围");
       return;
     }
-    setRandomNumber((Math.floor(Math.random() * (max - min + 1)) + min).toString());
+    setRandomNumber((Math.floor(Math.random() * (max - min + 1)) + min).toFixed().toString());
   };
 
   const generateRandomString = () => {
+    const charSet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_";
+
+    // 检查输入是否为纯数字
+    if (/^\d+$/.test(stringInput.trim())) {
+      const length = parseInt(stringInput.trim(), 10);
+      if (length <= 0) {
+        message.error("请输入一个正整数");
+        return;
+      }
+
+      if(length > 1000000){
+        message.error("数字太大，你的电脑顶不住的");
+        return;
+      }
+
+      let result = "";
+      for (let i = 0; i < length; i++) {
+        result += charSet.charAt(Math.floor(Math.random() * charSet.length));
+      }
+
+      setRandomString(result);
+      return;
+    }
+
+    // 原来的字符串选择逻辑
     try {
-      let items = stringInput.trim().startsWith("[") ? JSON.parse(stringInput) : stringInput.split(",").map(i => i.trim());
+      let items = stringInput.trim().startsWith("[")
+        ? JSON.parse(stringInput)
+        : stringInput.split(",").map(i => i.trim());
+
       if (!Array.isArray(items) || items.length === 0) {
         throw new Error();
       }
+
       setRandomString(items[Math.floor(Math.random() * items.length)]);
     } catch {
-      message.error("输入格式无效，请输入 JSON 数组或逗号分隔的字符串");
+      message.error("输入格式无效，请输入 JSON 数组、逗号分隔字符串或一个正整数");
     }
   };
 
@@ -179,7 +208,7 @@ const MathUtil: React.FC = () => {
             <Row gutter={16}><Col span={12}><Button type="primary" block onClick={generateRandomString}>生成</Button></Col>
               <Col span={12}><Button block onClick={() => handleCopy(randomString)}>复制</Button></Col></Row>
           ]}>
-            <TextArea placeholder="输入 JSON 数组或逗号分隔的字符串" value={stringInput} onChange={(e) => setStringInput(e.target.value)} autoSize={{ minRows: 6, maxRows: 9 }} />
+            <TextArea placeholder="输入数字，JSON数组或逗号分隔的字符串" value={stringInput} onChange={(e) => setStringInput(e.target.value)} autoSize={{ minRows: 6, maxRows: 9 }} />
             <TextArea placeholder="随机选择的字符串" value={randomString} readOnly autoSize={{ minRows: 3, maxRows: 6 }} style={{ marginTop: 8 }} />
           </Card>
         </Col>
