@@ -16,7 +16,13 @@ const customVarLessJson = lessToJs(varLessStr, { resolveVariables: true, stripPr
 export default defineConfig({
   base: "/react-ant-admin",
   build: {
-    outDir: "react-ant-admin"
+    outDir: "react-ant-admin",
+    target: 'esnext', // you can also use 'es2020' here
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      target: 'esnext', // you can also use 'es2020' here
+    },
   },
   define: {
     MENU_PATH: `"path"`,
