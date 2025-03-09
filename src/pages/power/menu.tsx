@@ -1,26 +1,22 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Row, Button, message, Popconfirm } from "antd";
-import { getMenuList as apiGetList, delMenu } from "@/api";
 import MenuModal from "@/components/modal/menu";
 import MyTable from "@/components/table";
-import MyIcon from "@/components/icon";
-import { MenuList, MapKey } from "@/types"
+import { MenuList } from "@/types";
 import "./index.less";
 
-
-export type ModalType = "add" | "addChild" | "edit"
+export type ModalType = "add" | "addChild" | "edit";
 export type SelectInfo = {
-  [MENU_KEY]?: string
-  isParent?: Boolean
-}
+  [MENU_KEY]?: string;
+  isParent?: Boolean;
+};
 
 function useMenu() {
   const [menus, setMenu] = useState<MenuList>([]);
-  const [tabCol, setCol] = useState<MapKey>([]);
+  const [tabCol, setCol] = useState([]);
   const [selectInfo, setSelectInfo] = useState<SelectInfo>({});
   const [showModal, setShowModal] = useState(false);
-  const [modalType, setModalType] = useState<ModalType>('add');
-
+  const [modalType, setModalType] = useState<ModalType>("add");
 
   const menuAction = {
     title: "操作",
@@ -50,45 +46,21 @@ function useMenu() {
       );
     },
   };
-  const getMenuList = () => {
-    apiGetList().then((res) => {
-      if (res) {
-        res.mapKey.push(menuAction);
-        res.mapKey.forEach((item) => {
-          if (item.dataIndex === "icon") {
-            item.render = (text: string | null) =>
-              text ? <MyIcon className="preview" type={text} /> : "暂未设置";
-          } else if (item.dataIndex === MENU_KEEPALIVE) {
-            item.render = (text: string) => (text === "true" ? "保持" : "关闭销毁");
-          } else if (item.dataIndex === MENU_SHOW) {
-            item.render = (t: string) => t === "true" ? '显示' : '隐藏'
-          }
-        });
-        setCol(res.mapKey);
-        setMenu(res.data);
-      }
-    });
-  };
 
-  useEffect(() => {
-    getMenuList();
-    // eslint-disable-next-line
-  }, []);
-
-  const openModal = (type: ModalType, { [MENU_KEY]: key, isParent }: SelectInfo) => {
+  const openModal = (
+    type: ModalType,
+    { [MENU_KEY]: key, isParent }: SelectInfo
+  ) => {
     setSelectInfo({ [MENU_KEY]: key, isParent: !Boolean(isParent) });
     setModalType(type);
     setShowModal(true);
   };
 
   const deleteMenu = (info: any) => {
-    delMenu(info).then((res) => {
-      const { msg, status } = res;
-      if (status === 0) {
-        message.success(msg);
-        getMenuList();
-      }
-    });
+    const { msg, status } = { msg: "操作成功", status: 0 };
+    if (status === 0) {
+      message.success(msg);
+    }
   };
   const addMenu = () => {
     openModal("add", {});
@@ -100,7 +72,6 @@ function useMenu() {
     modalType,
     tabCol,
     setShowModal,
-    getMenuList,
     addMenu,
   };
 }
@@ -113,7 +84,6 @@ export default function Menu() {
     modalType,
     tabCol,
     setShowModal,
-    getMenuList,
     addMenu,
   } = useMenu();
   return (
@@ -121,19 +91,24 @@ export default function Menu() {
       <Button type="primary" onClick={addMenu}>
         新增菜单
       </Button>
-      <MyTable dataSource={menus} rowKey={`${MENU_KEY}`} columns={tabCol} saveKey="MENUTABLE" />
+      <MyTable
+        dataSource={menus}
+        rowKey={`${MENU_KEY}`}
+        columns={tabCol}
+        saveKey="MENUTABLE"
+      />
       <MenuModal
         menus={menus}
         isShow={showModal}
         info={selectInfo}
         modalType={modalType}
         setShow={setShowModal}
-        updateMenu={getMenuList}
+        updateMenu={() => {}}
       />
     </div>
   );
 }
 
 Menu.route = {
-  [MENU_PATH]: "/power/menu"
-}
+  [MENU_PATH]: "/power/menu",
+};

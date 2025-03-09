@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Routes, Route } from "react-router-dom";
 import routerList, { RouterInfo } from "./list";
 import Intercept from "./intercept";
-import { getMenus } from "@/common";
 import { formatMenu, reduceMenuList } from "@/utils";
 import { MenuList } from "@/types"
 import { useDispatchMenu } from "@/store/hooks";
+import { routerConfig } from "./config";
 
 
 const Router = () => {
@@ -15,8 +15,7 @@ const Router = () => {
 
   useEffect(() => {
     if (stateSetMenuList && typeof stateSetMenuList === "function") {
-      getMenus().then((list) => {
-        const formatList = formatMenu(list)
+        const formatList = formatMenu(routerConfig)
         const userMenus = reduceMenuList(formatList);
         // 把请求的数据 和 本地pages页面暴露出的路由列表合并
         let routers = routerList.map((router) => {
@@ -28,12 +27,11 @@ const Router = () => {
           }
           return router;
         });
-        if (list && list.length) {
+        if (routerConfig && routerConfig.length) {
           stateSetMenuList(formatList);
           setAjaxUserMenuList(userMenus);
           setMergeList(routers);
         }
-      });
     }
   }, [stateSetMenuList]);
 

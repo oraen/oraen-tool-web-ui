@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { Button, Row, Col } from "antd";
 import TypeModal, { Info } from "@/components/modal/type";
-import { getPower } from "@/api";
 import MyTable from "@/components/table";
 import "./index.less";
-import { MapKey, MenuList, PowerList } from "@/types"
+import { MenuList } from "@/types";
 
 function formatMenuKey(list: MenuList) {
   return list.map((item) => {
@@ -18,8 +17,7 @@ function formatMenuKey(list: MenuList) {
 
 function useTypes() {
   const [showModal, setShow] = useState(false);
-  const [tableData, setData] = useState<PowerList>([]);
-  const [tableCol, setCol] = useState<MapKey>([]);
+  const [tableCol, setCol] = useState([]);
   const [choose, setChoose] = useState<Info>(null);
   const [menuList, setMenuList] = useState<MenuList>([]);
 
@@ -30,18 +28,7 @@ function useTypes() {
   const modalControl = (info: Info, open: boolean) => {
     setChoose(info);
     setShow(open);
-  }
-  const activeCol = {
-    dataIndex: "active",
-    key: "active",
-    title: "操作",
-    align: "center",
-    render: (text: any, record: any) => (
-      <Button type="link" onClick={() => modalControl(record, true)}>
-        编辑
-      </Button>
-    ),
-  }
+  };
   const renderTitle = () => (
     <Row justify="space-between" gutter={80}>
       <Col style={{ lineHeight: "32px" }}>用户信息列表</Col>
@@ -51,21 +38,18 @@ function useTypes() {
         </Button>
       </Col>
     </Row>
-  )
+  );
   const getTypeData = () => {
-    getPower().then((res) => {
-      if (res.status === 0) {
-        res.mapKey.push(activeCol);
-        setMenuList(formatMenuKey(res.menu));
-        setData(res.data);
-        setCol(res.mapKey);
-      }
-    });
-  }
+    const res = {
+      status: 0,
+      menu: [],
+    };
+    if (res.status === 0) {
+      setMenuList(formatMenuKey(res.menu));
+    }
+  };
   return {
     renderTitle,
-    tableCol,
-    tableData,
     showModal,
     choose,
     menuList,
@@ -77,8 +61,6 @@ function useTypes() {
 export default function Types() {
   const {
     renderTitle,
-    tableCol,
-    tableData,
     showModal,
     choose,
     modalControl,
@@ -90,8 +72,36 @@ export default function Types() {
       <MyTable
         rowKey="type_id"
         title={renderTitle}
-        columns={tableCol}
-        dataSource={tableData}
+        columns={[
+          { title: "权限id", dataIndex: "type_id", key: "type_id" },
+          { title: "权限简称", dataIndex: "name", key: "name" },
+          { title: "显示菜单列表id", dataIndex: "menu_id", key: "menu_id" },
+          {
+            dataIndex: "active",
+            key: "active",
+            title: "操作",
+            align: "center",
+            render: (text: any, record: any) => (
+              <Button type="link" onClick={() => modalControl(record, true)}>
+                编辑
+              </Button>
+            ),
+          },
+        ]}
+        dataSource={[
+          {
+            type_id: 1,
+            name: "超级管理员",
+            menu_id: "2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,1",
+          },
+          {
+            type_id: 2,
+            name: "用户",
+            menu_id: "1,9,10,11,2,7,6,17,18,16,3,4,5,8",
+          },
+          { type_id: 3, name: "游客", menu_id: "9,1,10,11,2,7,6,17,18,12" },
+          { type_id: 4, name: "低权游客", menu_id: "9,10" },
+        ]}
       />
       <TypeModal
         isShow={showModal}

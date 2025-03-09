@@ -33,8 +33,6 @@ interface Window {
 
 
 interface ImportMetaEnv {
-  readonly REACT_APP_MODE: 'development' | 'production'
-  readonly REACT_APP_ROUTERBASE: string
   readonly REACT_APP_API_BASEURL: string
   readonly REACT_APP_MOCK: string
   readonly REACT_APP_COLOR: string

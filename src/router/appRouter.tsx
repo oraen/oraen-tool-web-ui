@@ -7,7 +7,7 @@ import { getLocalUser } from "@/utils";
 import { useDispatchUser, useStateUserInfo } from "@/store/hooks";
 
 const isHash = import.meta.env.REACT_APP_ROUTER_ISHASH === "1"
-const RouterBasename = import.meta.env.REACT_APP_ROUTERBASE || "/"
+const RouterBasename = '/react-ant-admin'
 
 function AppRouter() {
   const [loading, setLoad] = useState(true);

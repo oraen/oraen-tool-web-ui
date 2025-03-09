@@ -1,14 +1,13 @@
 import { useEffect, useState } from "react";
-import { Modal,  Select, message, FormInstance } from "antd";
+import { Modal, Select, message, FormInstance } from "antd";
 import MyForm, { FormItemData } from "@/components/form";
-import { getPower, addUser, getUser, editUser } from "@/api";
 
-export type UserID = null | number
+export type UserID = null | number;
 interface UserProps {
-  user_id: UserID
-  isShow: boolean
-  onCancel: (id: UserID, s: boolean) => void
-  onOk: () => void
+  user_id: UserID;
+  isShow: boolean;
+  onCancel: (id: UserID, s: boolean) => void;
+  onOk: () => void;
 }
 const { Option } = Select;
 
@@ -60,39 +59,60 @@ const initFormItems: FormItemData[] = [
   },
 ];
 
-export default function UserModal({ user_id, isShow, onCancel, onOk }: UserProps) {
+export default function UserModal({
+  user_id,
+  isShow,
+  onCancel,
+  onOk,
+}: UserProps) {
   const [form, setForm] = useState<FormInstance | null>(null);
   const [formItems, setItems] = useState<FormItemData[]>([]);
   useEffect(() => {
     if (isShow) {
-      getPower().then((res) => {
-        const { data, status } = res;
-        if (status === 0) {
-          let items = initFormItems.map((i) => ({ ...i }));
-          items.forEach((i) => {
-            if (i.itemProps.name === "type_id") {
-              i.childProps = { ...i.childProps }
-              i.childProps.children = data.map((power) => (
-                <Option value={power.type_id} key={power.type_id}>
-                  {power.name}
-                </Option>
-              ));
-            }
-          });
-          setItems(items);
-        }
-      });
+      const res = {
+        status: 0,
+        data: [
+          {
+            type_id: 1,
+            name: "超级管理员",
+            menu_id: "2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,1",
+          },
+          {
+            type_id: 2,
+            name: "用户",
+            menu_id: "1,9,10,11,2,7,6,17,18,16,3,4,5,8",
+          },
+          { type_id: 3, name: "游客", menu_id: "9,1,10,11,2,7,6,17,18,12" },
+          { type_id: 4, name: "低权游客", menu_id: "9,10" },
+        ],
+        mapKey: [
+          { title: "权限id", dataIndex: "type_id", key: "type_id" },
+          { title: "权限简称", dataIndex: "name", key: "name" },
+          { title: "显示菜单列表id", dataIndex: "menu_id", key: "menu_id" },
+        ],
+        menu: [],
+      };
+      const { data, status } = res;
+      if (status === 0) {
+        let items = initFormItems.map((i) => ({ ...i }));
+        items.forEach((i) => {
+          if (i.itemProps.name === "type_id") {
+            i.childProps = { ...i.childProps };
+            i.childProps.children = data.map((power) => (
+              <Option value={power.type_id} key={power.type_id}>
+                {power.name}
+              </Option>
+            ));
+          }
+        });
+        setItems(items);
+      }
     }
   }, [isShow]);
 
-
   useEffect(() => {
     if (user_id && form) {
-      getUser({ user_id }).then((res) => {
-        if (res.data) {
-          form.setFieldsValue(res.data);
-        }
-      });
+      form.setFieldsValue({});
       let items = initFormItems.map((i) => ({ ...i }));
       items.forEach((i) => {
         if (i.itemProps.name === "pswd") {
@@ -113,20 +133,16 @@ export default function UserModal({ user_id, isShow, onCancel, onOk }: UserProps
   }, [user_id, form]);
 
   const submit = () => {
-    form && form.validateFields().then((values) => {
-      let modify = Boolean(user_id);
-      let fn = modify ? editUser : addUser;
-      if (modify) {
-        values.user_id = user_id;
-      }
-      fn(values).then((res) => {
-        if (res.status === 0) {
-          message.success(res.msg);
-          close();
-          onOk();
+    form &&
+      form.validateFields().then((values) => {
+        let modify = Boolean(user_id);
+        if (modify) {
+          values.user_id = user_id;
         }
+        message.success("成功");
+        close();
+        onOk();
       });
-    });
   };
   const close = () => {
     form && form.resetFields();

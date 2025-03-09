@@ -2,14 +2,11 @@ import { useState } from "react";
 import { Button, Row, Col } from "antd";
 import MyPagination, { PageInfo } from "@/components/pagination";
 import UserModal, { UserID } from "@/components/modal/user";
-import { getUserList } from "@/api";
 import "./index.less";
 import MyTable from "@/components/table";
-import { MapKey, ResponseUserInfo } from "@/types"
 
 export default function User() {
-  const [tableData, setData] = useState<ResponseUserInfo[]>([]);
-  const [tableCol, setCol] = useState<MapKey>([]);
+  const [tableData, setData] = useState([]);
   const [total, setTotal] = useState(0);
   const [showModal, setShow] = useState(false);
   const [chooseId, setId] = useState<UserID>(null);
@@ -22,19 +19,7 @@ export default function User() {
       setId(null);
     }
     setShow(type);
-  }
-
-  const activeCol = {
-    dataIndex: "active",
-    key: "active",
-    title: "操作",
-    align: "center",
-    render: (text: string, record: ResponseUserInfo) => (
-      <Button type="link" onClick={() => showInfoModal(record.user_id, true)}>
-        编辑
-      </Button>
-    ),
-  }
+  };
 
   const renderTitle = () => (
     <Row justify="space-between" gutter={80}>
@@ -45,23 +30,41 @@ export default function User() {
         </Button>
       </Col>
     </Row>
-  )
+  );
   const getUserData = (data: any) => {
     setPage(data);
-    getUserList(data).then((res) => {
-      const { data, status, total } = res;
-      if (status === 0 && data) {
-        const { mapKey, list } = data;
-        mapKey.push(activeCol);
-        setCol(mapKey);
-        setTotal(total);
-        setData(list);
-      }
-    });
-  }
+    const { _data, status, total } = {
+      _data: {
+        list: [],
+        mapKey: [
+          {
+            dataIndex: "active",
+            key: "active",
+            title: "操作",
+            align: "center",
+            render: (text: string, record: any) => (
+              <Button
+                type="link"
+                onClick={() => showInfoModal(record.user_id, true)}
+              >
+                编辑
+              </Button>
+            ),
+          },
+        ],
+      },
+      status: 0,
+      total: 0,
+    };
+    if (status === 0 && _data) {
+      const { mapKey, list } = _data;
+      setTotal(total);
+      setData(list);
+    }
+  };
   const updateUserData = () => {
     getUserData(pageData);
-  }
+  };
 
   return (
     <div className="user-container">
@@ -69,7 +72,22 @@ export default function User() {
         title={renderTitle}
         dataSource={tableData}
         rowKey="user_id"
-        columns={tableCol}
+        columns={[
+          {
+            dataIndex: "active",
+            key: "active",
+            title: "操作",
+            align: "center",
+            render: (text: string, record: any) => (
+              <Button
+                type="link"
+                onClick={() => showInfoModal(record.user_id, true)}
+              >
+                编辑
+              </Button>
+            ),
+          },
+        ]}
         pagination={false}
       />
       <MyPagination

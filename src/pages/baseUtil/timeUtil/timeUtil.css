@@ -1,0 +1,9 @@
+/* 隐藏输入框 */
+.custom-date-picker .ant-picker-input input {
+  display: none;
+}
+
+/* 调整图标的位置 */
+.custom-date-picker .ant-picker-suffix {
+  margin-left: 0; /* 移除默认的左边距 */
+}

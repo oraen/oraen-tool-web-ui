@@ -2,27 +2,26 @@ import { ReactNode, useEffect, useState } from "react";
 import MyIcon from "@/components/icon";
 import MyForm, { FormItemData } from "@/components/form";
 import { Modal, Select, message, FormInstance } from "antd";
-import { addMenu, getMenuInfo, editMenu } from "@/api";
-import { MenuList, MenuItem } from "@/types"
-import { ModalType, SelectInfo } from "@/pages/power/menu"
+import { MenuList, MenuItem } from "@/types";
+import { ModalType, SelectInfo } from "@/pages/power/menu";
 import ICON_JSON from "@/assets/json/iconfont.json";
 
 import "./index.less";
 interface IconItem {
-  icon_id: string,
-  name: string,
-  font_class: string,
-  unicode: string,
-  unicode_decimal: number
+  icon_id: string;
+  name: string;
+  font_class: string;
+  unicode: string;
+  unicode_decimal: number;
 }
 
 interface MenuModalProps {
-  info: SelectInfo
-  modalType: ModalType
-  isShow: boolean
-  setShow: (s: boolean) => void
-  updateMenu: () => void
-  menus: MenuList
+  info: SelectInfo;
+  modalType: ModalType;
+  isShow: boolean;
+  setShow: (s: boolean) => void;
+  updateMenu: () => void;
+  menus: MenuList;
 }
 
 interface ActiveFn {
@@ -134,25 +133,25 @@ const initFormItems: FormItemData[] = [
 ];
 
 function getMenuList(list: MenuList, id: number | string) {
-  let menu: MenuList = []
+  let menu: MenuList = [];
   const findList = (ls: MenuList): boolean => {
-    return ls.some(item => {
-      let l = item[MENU_CHILDREN]
+    return ls.some((item) => {
+      let l = item[MENU_CHILDREN];
       if (item[MENU_KEY] === id) {
-        menu = ls
-        return true
+        menu = ls;
+        return true;
       } else if (Array.isArray(l) && l.length) {
-        let d = findList(l)
+        let d = findList(l);
         if (d) {
-          menu = l
+          menu = l;
         }
-        return d
+        return d;
       }
-      return false
-    })
-  }
-  findList(list)
-  return menu
+      return false;
+    });
+  };
+  findList(list);
+  return menu;
 }
 
 export default function MenuModal({
@@ -172,9 +171,13 @@ export default function MenuModal({
       let items = [...initFormItems.map((i) => ({ ...i }))];
       items.forEach((i) => {
         if (i.itemProps.name === MENU_PARENTKEY) {
-          let disabled = modalType === "addChild" || (modalType === "edit" && info.isParent);
-          i.childProps && (i.childProps.disabled = disabled)
-          let childrenList = modalType === "addChild" ? getMenuList(menus, info[MENU_KEY] as string) : menus
+          let disabled =
+            modalType === "addChild" || (modalType === "edit" && info.isParent);
+          i.childProps && (i.childProps.disabled = disabled);
+          let childrenList =
+            modalType === "addChild"
+              ? getMenuList(menus, info[MENU_KEY] as string)
+              : menus;
           if (i.childProps) {
             i.childProps.children = childrenList.map((menu) => (
               <Option value={menu[MENU_KEY]} key={menu[MENU_KEY]}>
@@ -185,7 +188,6 @@ export default function MenuModal({
               </Option>
             ));
           }
-
         }
       });
       setItems(items);
@@ -196,25 +198,13 @@ export default function MenuModal({
     }
   }, [modalType, info, menus]);
 
-  useEffect(() => {
-    if (modalType === "edit" && isShow && form) {
-      getMenuInfo({ key: info && info[MENU_KEY] }).then((res) => {
-        if (res.status === 0 && res.data) {
-          form.setFieldsValue(res.data);
-        }
-      });
-    } else if (modalType === "addChild" && isShow && form) {
-      form.setFieldsValue({
-        [MENU_PARENTKEY]: info && info[MENU_KEY],
-      });
-    }
-  }, [modalType, isShow, info, form]);
   // 提交表单
   const submit = () => {
-    form && form.validateFields().then((values) => {
-      let fn = activeFn[modalType];
-      fn(values);
-    });
+    form &&
+      form.validateFields().then((values) => {
+        let fn = activeFn[modalType];
+        fn(values);
+      });
   };
 
   const onCancel = () => {
@@ -222,24 +212,23 @@ export default function MenuModal({
     setShow(false);
   };
   function edit(data: MenuItem) {
-    editMenu(data).then((res) => {
-      const { status, msg } = res;
-      if (status === 0) {
-        message.success(msg);
-        onCancel();
-        updateMenu();
-      }
-    });
+    const { status, msg } = { status: 0, msg: "修改成功！" };
+    if (status === 0) {
+      message.success(msg);
+      onCancel();
+      updateMenu();
+    }
   }
   function add(data: MenuItem) {
-    addMenu(data).then((res) => {
-      const { status, msg } = res;
-      if (status === 0) {
-        message.success(msg);
-        onCancel();
-        updateMenu();
-      }
-    });
+    const { status, msg } = {
+      msg: "添加成功,菜单栏需要关闭页面重新打开即可生效！",
+      status: 0,
+    };
+    if (status === 0) {
+      message.success(msg);
+      onCancel();
+      updateMenu();
+    }
   }
   return (
     <Modal

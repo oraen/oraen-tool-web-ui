@@ -5,7 +5,6 @@ import MyTable from "@/components/table";
 import FeedbackModal from "@/components/modal/feedback";
 
 import { Button, FormInstance, message, Spin } from "antd";
-import { getFeedBack, reply } from "@/api";
 
 import "./index.less";
 
@@ -33,26 +32,10 @@ export default function FeedBack() {
   const [form, setForm] = useState<FormInstance | null>(null);
   const [pageData, setPageData] = useState({ page: 1 });
   const [tableData, setData] = useState([]);
-  const [tableCol, setCol] = useState([]);
   const [load, setLoad] = useState(false);
   const [total, setTotal] = useState(0);
   const [showModal, setModal] = useState(false);
   const [chooseid, setId] = useState(null);
-  const menuAction = {
-    title: "操作",
-    dataIndex: "action",
-    align: "center",
-    render: (text: any, record: any) => {
-      if (record.f_back) {
-        return "已回复";
-      }
-      return (
-        <Button type="link" onClick={() => show(record.fd_id, true)}>
-          回复
-        </Button>
-      );
-    },
-  };
   // 显示 关闭 弹窗
   const show = (id: any, show: boolean) => {
     setModal(show);
@@ -61,38 +44,8 @@ export default function FeedBack() {
   // 获取列表
   const getDataList = (data: any, isInit = true) => {
     setLoad(true);
-    getFeedBack(data)
-      .then((res: any) => {
-        const { data, status, mapKey, total } = res;
-        if (status === 0) {
-          if (isInit) {
-            mapKey.forEach((item: any) => {
-              if (
-                item.dataIndex === "f_back" ||
-                item.dataIndex === "f_context"
-              ) {
-                item.render = (text: any) =>
-                  text ? (
-                    <div
-                      className="text"
-                      dangerouslySetInnerHTML={{ __html: text }}
-                    ></div>
-                  ) : (
-                    "暂未回复~"
-                  );
-              }
-            });
-            mapKey.push(menuAction);
-            setCol(mapKey);
-          }
-
-          setTotal(total);
-          setData(data.map((i: any) => ({ ...i, key: i.m_id })));
-        }
-      })
-      .finally(() => {
-        setLoad(false);
-      });
+    setTotal(0);
+    setData(data.map((i: any) => ({ ...i, key: i.m_id })));
   };
 
   // 顶部表单搜索
@@ -115,14 +68,9 @@ export default function FeedBack() {
   };
   // 回复
   const gotoReply = (data: any) => {
-    reply(data).then((res: any) => {
-      const { status, msg } = res;
-      if (status === 0) {
-        message.success(msg);
-        show(null, false);
-        search();
-      }
-    });
+    message.success("成功");
+    show(null, false);
+    search();
   };
   return (
     <div className="feedback-container">
@@ -137,7 +85,23 @@ export default function FeedBack() {
         </MyForm>
         <MyTable
           dataSource={tableData}
-          columns={tableCol}
+          columns={[
+            {
+              title: "操作",
+              dataIndex: "action",
+              align: "center",
+              render: (text: any, record: any) => {
+                if (record.f_back) {
+                  return "已回复";
+                }
+                return (
+                  <Button type="link" onClick={() => show(record.fd_id, true)}>
+                    回复
+                  </Button>
+                );
+              },
+            },
+          ]}
           pagination={false}
           rowKey="fd_id"
           saveKey="feedbackTable"

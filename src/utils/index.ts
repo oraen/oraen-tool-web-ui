@@ -1,4 +1,4 @@
-import { getMenus, } from "@/common";
+import { routerConfig } from "@/router/config";
 import { MenuItem, MenuList, UserInfo, LayoutMode, MenuResponse, State, MenuMap } from "@/types"
 export const USER_INFO = "USER_INFO";
 export const TOKEN = "REACT_ADMIN_TOKEN";
@@ -7,23 +7,22 @@ export const VISIBLE = "COMPONENTS_VISIBLE";
 export const LAYOUT_MODE = "LAYOUT_MODE";
 
 interface MenuOpenData {
-  openKeys: string[]
-  selectKey: string[]
+  openKeys: number[]
+  selectKey: number[]
   openedMenu: MenuItem[]
 }
 type Token = string | null | undefined
 
 // 获取默认页面
 async function getDefaultMenu(): Promise<MenuOpenData> {
-  let openKeys: string[] = [],
-    selectKey: string[] = [],
+  let openKeys: number[] = [],
+    selectKey: number[] = [],
     openedMenu: MenuItem[] = [];
-  const menuList = await getMenus();
-  menuList.some((list) => {
+  routerConfig.some((list) => {
     const child = list[MENU_CHILDREN]
     if (child && child.length) {
-      openKeys = [(list[MENU_KEY] as string)];
-      selectKey = [(child[0][MENU_KEY] as string)];
+      openKeys = [(list[MENU_KEY] as number)];
+      selectKey = [(child[0][MENU_KEY] as number)];
       openedMenu = [child[0]];
       return true;
     }

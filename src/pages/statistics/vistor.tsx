@@ -1,18 +1,16 @@
 import { useEffect, useState } from "react";
 import { Row, Col, Card, Progress } from "antd";
-import { getVisitorList, getVisitorData } from "@/api";
 import { Line as LineEchart } from "@/components/echarts";
 import MyPagination, { PageInfo } from "@/components/pagination";
 import MyTable from "@/components/table";
 import "./index.less";
-import { VisitData, MapKey } from "@/types"
 
 const getOpt = () => ({
   xAxis: {
     type: "category",
     boundaryGap: false,
     show: false,
-    data: []
+    data: [],
   },
   yAxis: {
     show: false,
@@ -64,44 +62,39 @@ const getTableTitle = () => {
   );
 };
 function useVistor() {
-  const [tableCol, setCol] = useState<MapKey>([]);
-  const [tableData, setData] = useState<VisitData[]>([]);
+  const [tableData, setData] = useState([]);
   const [total, setTotal] = useState(0);
   const [visitorOpt, setVisitor] = useState(getOpt());
   const [dealOpt, setDeal] = useState(getOpt());
   const [sumVisitor, setSumV] = useState(0);
   const [sumDeal, setSumD] = useState(0);
-  const [pageInfo, setPage] = useState<PageInfo>({ page: 1 })
+  const [pageInfo, setPage] = useState<PageInfo>({ page: 1 });
   useEffect(() => {
-    getVisitorData().then((res) => {
-      const { status, data } = res;
-      if (status === 0 && data) {
-        const vOpt = { ...visitorOpt };
-        const dOpt = { ...dealOpt };
-        (vOpt.xAxis.data as string[]) = data.ips.map((i) => i.time);
-        (vOpt.series[0].data as number[]) = data.ips.map((i) => i.value);
-        (dOpt.xAxis.data as string[]) = data.deal.map((i) => i.time);
-        (dOpt.series[0].data as number[]) = data.deal.map((i) => i.value);
-        setDeal(dOpt);
-        setVisitor(vOpt);
-        setSumV(data.today.ips);
-        setSumD(data.today.deal);
-      }
-    });
+    const { status, data } = {
+      status: 1,
+      data: { today: { ips: 0, deal: 0 }, ips: [], deal: [] },
+    };
+    if (status === 0 && data) {
+      const vOpt = { ...visitorOpt };
+      const dOpt = { ...dealOpt };
+      (vOpt.xAxis.data as string[]) = [];
+      (vOpt.series[0].data as number[]) = [];
+      (dOpt.xAxis.data as string[]) = [];
+      (dOpt.series[0].data as number[]) = [];
+      setDeal(dOpt);
+      setVisitor(vOpt);
+      setSumV(data.today.ips);
+      setSumD(data.today.deal);
+    }
     // eslint-disable-next-line
   }, []);
 
   const getList = (data: any) => {
-    setPage(data)
-    getVisitorList(data).then((res) => {
-      const { status, data } = res;
-      if (status === 0 && data) {
-        let list = data.list || [];
-        setData(list);
-        setCol(data.mapKey);
-        setTotal(data.total);
-      }
-    });
+    if (data) {
+      let list: any = [];
+      setData(list);
+      setTotal(0);
+    }
   };
   return {
     visitorOpt,
@@ -109,10 +102,9 @@ function useVistor() {
     sumVisitor,
     sumDeal,
     tableData,
-    tableCol,
     getList,
     total,
-    pageInfo
+    pageInfo,
   };
 }
 
@@ -123,10 +115,9 @@ export default function Vistor() {
     sumVisitor,
     sumDeal,
     tableData,
-    tableCol,
     getList,
     total,
-    pageInfo
+    pageInfo,
   } = useVistor();
   return (
     <div className="vistor-container">
@@ -189,11 +180,22 @@ export default function Vistor() {
       <MyTable
         title={getTableTitle}
         dataSource={tableData}
-        columns={tableCol}
+        columns={[
+          { title: "消息id", dataIndex: "m_id", key: "m_id" },
+          { title: "消息名称", dataIndex: "name", key: "name" },
+          { title: "消息描述词", dataIndex: "description", key: "description" },
+          { title: "创建人", dataIndex: "creator", key: "creator" },
+          { title: "创建时间", dataIndex: "add_time", key: "add_time" },
+        ]}
         rowKey="s_id"
         pagination={false}
       />
-      <MyPagination page={pageInfo.page} change={getList} immediately={getList} total={total} />
+      <MyPagination
+        page={pageInfo.page}
+        change={getList}
+        immediately={getList}
+        total={total}
+      />
     </div>
   );
 }
