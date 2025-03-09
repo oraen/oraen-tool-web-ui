@@ -36,8 +36,8 @@ export const routerConfig = [
         order: 9588,
       },
       {
-        title: "加密解密",
-        path: "/mathUtil",
+        title: "加密工具",
+        path: "/cryptologyUtil",
         m_id: 14,
         parent_m_id: 1,
         icon: null,
