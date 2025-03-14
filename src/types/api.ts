@@ -1,4 +1,3 @@
-import { UserInfo } from "./user"
 import { MenuItem, MenuList } from "./menu"
 export type MessageList = MessageItem[]
 type MessageItem = {
@@ -27,10 +26,7 @@ export interface MessageAPi extends ResponseData {
   }
 }
 
-export interface LoginApi extends ResponseData {
-  data: UserInfo
-  token: string
-}
+
 export type PowerList = {
   type_id: number
   name: string

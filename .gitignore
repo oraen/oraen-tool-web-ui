@@ -14,7 +14,7 @@ package-lock.json
 /theme/**
 !/theme/var.less
 /public/color.less
-/react-ant-admin
+/oraen-tool-web-ui
 /src/router/auto.**
 # production
 

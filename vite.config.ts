@@ -14,9 +14,9 @@ const customVarLessJson = lessToJs(varLessStr, { resolveVariables: true, stripPr
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: "/react-ant-admin",
+  base: "/",
   build: {
-    outDir: "react-ant-admin",
+    outDir: "oraen-tool-web-ui",
     target: 'esnext', // you can also use 'es2020' here
   },
   optimizeDeps: {
@@ -65,16 +65,7 @@ export default defineConfig({
   server: {
     port: 3000,
     open: false,
-    host: true,
-    proxy: {
-      '^/api': {
-        target: "https://z3web.cn",
-        changeOrigin: true,
-        rewrite: (path) => {
-          return path.replace("/api", "/api/react-ant-admin")
-        }
-      },
-    },
+    host: true
   },
   envPrefix: "REACT_APP_",
 })

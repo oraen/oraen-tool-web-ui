@@ -5,25 +5,18 @@ export default function BottomFooter() {
   return (
     <Footer className="footer">
       <p>
-        <a
-          href="https://z3web.cn/doc-react-ant-admin"
-          target="_blank"
-          rel="noreferrer"
-        >
-          react-ant-admin文档地址
-        </a>
+        版权归个人所有
       </p>
       <p>
         <a
-          href="https://jq.qq.com/?_wv=1027&k=pzP2acC5"
+          href="https://beian.miit.gov.cn/#/Integrated/index"
           target="_blank"
           rel="noreferrer"
         >
-          qq交流群
+          备案/许可证编号：粤ICP备19133064号
         </a>
       </p>
-      <p>备案/许可证编号：湘ICP备20007569号</p>
-      <p>react-ant-admin ©2021 Created by azheng</p>
+      <p>oraen.com（牙膏盒） ©2020 Created by Corki Tse</p>
     </Footer>
   );
 }
