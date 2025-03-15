@@ -449,7 +449,7 @@ const TimeConverter: React.FC = () => {
               <Col style={{ flex: "none" }}>
                 <Text strong>开始时间：</Text>
               </Col>
-              <Col style={{ flex: 1 }}>
+              <Col span={15}>
                 <Input
                   value={startTime ? startTime.format("YYYY-MM-DD HH:mm:ss.SSS") : ""}
                   readOnly
@@ -462,7 +462,7 @@ const TimeConverter: React.FC = () => {
               <Col style={{ flex: "none" }}>
                 <Text strong>结束时间：</Text>
               </Col>
-              <Col span={18}>
+              <Col span={15}>
                 <Input
                   value={endTime ? endTime.format("YYYY-MM-DD HH:mm:ss.SSS") : ""}
                   readOnly
@@ -475,7 +475,7 @@ const TimeConverter: React.FC = () => {
               <Col style={{ flex: "none" }}>
                 <Text strong>间隔时间：</Text>
               </Col>
-              <Col span={18}>
+              <Col span={15}>
                 <Input
                   value={intervalTime}
                   readOnly

@@ -172,7 +172,7 @@ const EncryptionTool: React.FC = () => {
         <Space direction="vertical" style={{ width: "100%" }}>
           <Input.TextArea
             rows={8}
-            placeholder="输入文本A"
+            placeholder="源文本"
             value={textA}
             // @ts-ignore
             onChange={(e) => handleTextAChange(e)}
@@ -190,13 +190,13 @@ const EncryptionTool: React.FC = () => {
           style={{ margin: "10px 0" }}
           onClick={handleEncrypt}
         >
-          双向转换
+          加密（解密）
         </Button>
 
         <Space direction="vertical" style={{ width: "100%" }}>
           <Input.TextArea
             rows={8}
-            placeholder="加密/解密后的内容B"
+            placeholder="加密后的文本"
             value={textB}
             // @ts-ignore
             onChange={(e) =>  handleTextBChange(e)}

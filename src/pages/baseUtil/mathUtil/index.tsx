@@ -179,13 +179,13 @@ const MathUtil: React.FC = () => {
             {/* 提示示例 */}
             <Card title="计算示例" style={{ marginTop: 16, background: "#fafafa", borderRadius: 8 }}>
               <Row gutter={[16, 8]}>
-                <Col span={12}><Tag color="blue">阶乘运算</Tag> <Text>6! → 720</Text></Col>
-                <Col span={12}><Tag color="green">求余运算</Tag> <Text>6 % 4 → 2</Text></Col>
-                <Col span={12}><Tag color="orange">求幂运算</Tag> <Text>2 ^ 3 → 8</Text></Col>
-                <Col span={12}><Tag color="red">开方运算</Tag> <Text>sqrt(2) → 1.414</Text></Col>
-                <Col span={12}><Tag color="purple">对数运算</Tag> <Text>log(1024, 2) → 10</Text></Col>
-                <Col span={12}><Tag color="gold">三角函数</Tag> <Text>sin(30 deg) → 0.5</Text></Col>
-                <Col span={12}><Tag color="cyan">角度表示</Tag> <Text>tan(45 deg) → 1</Text></Col>
+                <Col span={12}><Tag color="blue">阶乘运算</Tag> <Text>6! </Text></Col>
+                <Col span={12}><Tag color="green">求余运算</Tag> <Text>6 % 4</Text></Col>
+                <Col span={12}><Tag color="orange">求幂运算</Tag> <Text>2 ^ 3</Text></Col>
+                <Col span={12}><Tag color="red">开方运算</Tag> <Text>sqrt(2)</Text></Col>
+                <Col span={12}><Tag color="purple">对数运算</Tag> <Text>log(1024, 2) </Text></Col>
+                <Col span={12}><Tag color="gold">三角函数</Tag> <Text>sin(30 deg) </Text></Col>
+                <Col span={12}><Tag color="cyan">角度表示</Tag> <Text>tan(45 deg) </Text></Col>
               </Row>
 
             </Card>
