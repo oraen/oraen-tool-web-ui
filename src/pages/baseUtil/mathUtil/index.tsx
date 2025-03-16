@@ -16,7 +16,59 @@ const MathUtil: React.FC = () => {
     precision: 64, // 设置计算精度为 64 位
   });
 
+  //进制转化
+  // 新增状态：进制转换相关
+  const [baseConvertInput, setBaseConvertInput] = useState("");
+  const [baseConvertOutput, setBaseConvertOutput] = useState("");
+  const [baseConvertError, settBaseConvertError] = useState(""); // 错误提示
+  const [baseInput, setBaseInput] = useState("10"); // 当前进制
+  const [baseOutput, setBaseOutput] = useState("2"); // 目标进制
 
+
+  // 进制转换函数
+  const handleConvert = () => {
+    try {
+      const inputBase = parseInt(baseInput, 10);
+      const outputBase = parseInt(baseOutput, 10);
+
+      // 检查输入是否为空
+      if (!input.trim()) {
+        settBaseConvertError("请输入需要转换的数字");
+        setBaseConvertOutput("");
+        return;
+      }
+
+      // 将输入从当前进制转换为十进制
+      const decimalValue = parseInt(baseConvertInput, inputBase);
+
+      // 检查输入是否有效
+      if (isNaN(decimalValue)) {
+        settBaseConvertError("输入的数字与当前进制不匹配");
+        setBaseConvertOutput("");
+        return;
+      }
+
+      // 将十进制转换为目标进制
+      const result = decimalValue.toString(outputBase).toUpperCase();
+      setBaseConvertOutput(result);
+      settBaseConvertError("");
+    } catch (error) {
+      settBaseConvertError("进制转换失败，请检查输入");
+      setBaseConvertOutput("");
+    }
+  };
+
+  // 监听回车键
+  const handleBaseConvertKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleConvert();
+    }
+  };
+
+
+
+//
   const handleCalculate = () => {
     try {
       // 清理输入：去除空格和换行符
@@ -214,9 +266,80 @@ const MathUtil: React.FC = () => {
         </Col>
 
 
-        {/* 第三个组件  开发者*/}
+        {/* 第三个组件：数字转换 */}
         <Col span={8}>
-          <Card title="施工中..."></Card>
+          <Card
+            title="进制转换"
+            actions={[
+              <Row gutter={16} style={{ marginTop: 16 }}>
+                <Col span={12}>
+                  <Button type="primary" block onClick={handleConvert}>
+                    转换
+                  </Button>
+                </Col>
+                <Col span={12}>
+                  <Button block onClick={() => handleCopy(baseConvertOutput)}>
+                    复制结果
+                  </Button>
+                </Col>
+              </Row>,
+            ]}
+          >
+            {/* 输入框 */}
+            <Input
+              placeholder="输入数字"
+              value={baseConvertInput}
+              onChange={(e) => setBaseConvertInput(e.target.value)}
+              onKeyDown={handleBaseConvertKeyDown}
+              style={{ marginBottom: 16 }}
+            />
+
+            {/* 当前进制和目标进制选择 */}
+            <Row gutter={16} style={{ marginBottom: 16 }}>
+              <Col span={12}>
+                <select
+                  value={baseInput}
+                  onChange={(e) => setBaseInput(e.target.value)}
+                  style={{ width: "100%", padding: 8 }}
+                >
+                  <option value="2">二进制</option>
+                  <option value="4">四进制</option>
+                  <option value="8">八进制</option>
+                  <option value="10">十进制</option>
+                  <option value="16">十六进制</option>
+                </select>
+              </Col>
+              <Col span={12}>
+                <select
+                  value={baseOutput}
+                  onChange={(e) => setBaseOutput(e.target.value)}
+                  style={{ width: "100%", padding: 8 }}
+                >
+                  <option value="2">二进制</option>
+                  <option value="4">四进制</option>
+                  <option value="8">八进制</option>
+                  <option value="10">十进制</option>
+                  <option value="16">十六进制</option>
+                </select>
+              </Col>
+            </Row>
+
+            {/* 错误提示 */}
+            {baseConvertError && (
+              <Text type="danger" style={{ display: "block", marginBottom: 16 }}>
+                {baseConvertError}
+              </Text>
+            )}
+
+            {/* 输出框 */}
+            <TextArea
+              placeholder="转换结果将显示在这里"
+              value={baseConvertOutput}
+              readOnly
+              autoSize={{ minRows: 3, maxRows: 6 }}
+              style={{ backgroundColor: "#f5f5f5" }}
+            />
+          </Card>
         </Col>
       </Row>
 
