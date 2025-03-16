@@ -32,7 +32,7 @@ const MathUtil: React.FC = () => {
       const outputBase = parseInt(baseOutput, 10);
 
       // 检查输入是否为空
-      if (!input.trim()) {
+      if (!baseConvertInput.trim()) {
         settBaseConvertError("请输入需要转换的数字");
         setBaseConvertOutput("");
         return;
@@ -256,7 +256,7 @@ const MathUtil: React.FC = () => {
             <TextArea placeholder="随机数" value={randomNumber} readOnly autoSize={{ minRows: 3, maxRows: 6 }} style={{ marginTop: 8 }} />
           </Card>
 
-          <Card title="随机字符串选择" actions={[
+          <Card title="随机字符串生成" actions={[
             <Row gutter={16}><Col span={12}><Button type="primary" block onClick={generateRandomString}>生成</Button></Col>
               <Col span={12}><Button block onClick={() => handleCopy(randomString)}>复制</Button></Col></Row>
           ]}>
