@@ -1,6 +1,6 @@
 import React from 'react';
 import { Layout, Menu, Avatar, Typography, Row, Col, Card, Divider, Space } from 'antd';
-import { MailOutlined, QrcodeOutlined, LinkOutlined, GlobalOutlined } from '@ant-design/icons';
+import {MailOutlined, QrcodeOutlined, LinkOutlined, GlobalOutlined, LinkedinFilled} from '@ant-design/icons';
 import corkiAvatar from '../../../resource/wu537.jpg';
 import bearAvatar from '../../../resource/bear2.jpg';
 import qrcodeImage from '../../../resource/ewm.jpg';
@@ -51,27 +51,38 @@ const App: React.FC = () => {
             <Card title="联系方式" bordered={false}>
               <Space direction="vertical" size="middle">
                 <div>
-                  <MailOutlined /> 邮箱: oraen1998@gmail.com
+                  <MailOutlined/> 邮箱: oraen1998@gmail.com
                 </div>
                 <div>
-                  <QrcodeOutlined /> 微信公众号: 牙膏盒<div
-                  style={{width: '100px', height: '100px', backgroundColor: '#f0f0f0'}}>
-                  <img
-                    src={qrcodeImage} // 使用二维码图片
-                    alt="微信公众号二维码"
-                    style={{width: '100px', height: '100px'}}
-                  />
+                  <QrcodeOutlined/> 微信公众号: 牙膏盒
+                  <div
+                    style={{width: '100px', height: '100px', backgroundColor: '#f0f0f0'}}>
+                    <img
+                      src={qrcodeImage} // 使用二维码图片
+                      alt="微信公众号二维码"
+                      style={{width: '100px', height: '100px'}}
+                    />
+                  </div>
                 </div>
+                <div>
+                  <LinkedinFilled/> LinkedIn地址:
+                  <a
+                    href="https://www.linkedin.com/in/corki-tse/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    我的LinkedIn主页
+                  </a>
                 </div>
                 <div>
                   <LinkOutlined/> CSDN地址:
                   <a
                     href="https://blog.csdn.net/pass_JMC?type=blog"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  我的CSDN主页
-                </a>
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    我的CSDN主页
+                  </a>
                 </div>
                 <div>
                   <GlobalOutlined/> 个人网站: <a href="https://oraen.com" target="_blank"
