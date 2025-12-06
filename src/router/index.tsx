@@ -10,30 +10,35 @@ import { routerConfig } from "./config";
 
 const Router = () => {
   const { stateSetMenuList } = useDispatchMenu()
-  const [mergeRouterList, setMergeList] = useState<RouterInfo[]>([]);// 本地 和 接口返回的路由列表 合并的结果
-  const [ajaxUserMenuList, setAjaxUserMenuList] = useState<MenuList>([]); // 网络请求回来的 路由列表
+  // 使用 useMemo 提前计算路由合并结果，避免等待 useEffect
+  const mergedData = useMemo(() => {
+    if (!routerConfig || !routerConfig.length) {
+      return null;
+    }
+    const formatList = formatMenu(routerConfig as MenuList)
+    const userMenus = reduceMenuList(formatList);
+    // 把请求的数据 和 本地pages页面暴露出的路由列表合并
+    const routers = routerList.map((router) => {
+      let find = userMenus.find((i) => (i[MENU_PARENTPATH] || "") + i[MENU_PATH] === router[MENU_PATH]);
+      if (find) {
+        return { ...find, ...router }; // 本地 优先 接口结果
+      } else {
+        return { ...router, [MENU_KEY]: router[MENU_PATH] };
+      }
+    });
+    return { formatList, userMenus, routers };
+  }, []); // 只在初始化时计算一次
+
+  const [mergeRouterList, setMergeList] = useState<RouterInfo[]>(mergedData?.routers || []);// 本地 和 接口返回的路由列表 合并的结果
+  const [ajaxUserMenuList, setAjaxUserMenuList] = useState<MenuList>(mergedData?.userMenus || []); // 本地配置的路由列表
 
   useEffect(() => {
-    if (stateSetMenuList && typeof stateSetMenuList === "function") {
-        const formatList = formatMenu(routerConfig)
-        const userMenus = reduceMenuList(formatList);
-        // 把请求的数据 和 本地pages页面暴露出的路由列表合并
-        let routers = routerList.map((router) => {
-          let find = userMenus.find((i) => (i[MENU_PARENTPATH] || "") + i[MENU_PATH] === router[MENU_PATH]);
-          if (find) {
-            router = { ...find, ...router }; // 本地 优先 接口结果
-          } else {
-            router[MENU_KEY] = router[MENU_PATH];
-          }
-          return router;
-        });
-        if (routerConfig && routerConfig.length) {
-          stateSetMenuList(formatList);
-          setAjaxUserMenuList(userMenus);
-          setMergeList(routers);
-        }
+    if (mergedData && stateSetMenuList && typeof stateSetMenuList === "function") {
+      stateSetMenuList(mergedData.formatList);
+      setAjaxUserMenuList(mergedData.userMenus);
+      setMergeList(mergedData.routers);
     }
-  }, [stateSetMenuList]);
+  }, [mergedData, stateSetMenuList]);
 
 
   const routerBody = useMemo(() => {

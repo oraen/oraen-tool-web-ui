@@ -19,7 +19,7 @@ function getRandomColor() {
 const listData = Array.from({ length: 10 }, (v, k) => ({
   href: "https://ant.design",
   title: `ant design part ${k + 1}`,
-  avatar: "https://zos.alipayobjects.com/rmsportal/ODTLcjxAfvqbxHnVXCYX.png",
+  avatar: "",
   description:
     "Ant Design, a design language for background applications, is refined by Ant UED Team.",
   content:
@@ -61,13 +61,7 @@ const tabpanes = Array.from({ length: 3 }, (v, k) => ({
             key="list-vertical-message"
           />,
         ]}
-        extra={
-          <img
-            width={272}
-            alt="logo"
-            src="https://gw.alipayobjects.com/zos/rmsportal/mqaQswcyDLcXyDKnZfES.png"
-          />
-        }
+        extra={null}
       >
         <List.Item.Meta
           avatar={<Avatar src={item.avatar} />}
@@ -99,14 +93,7 @@ export default function Person() {
     <div className="person-container">
       <Row>
         <Col span={6}>
-          <Card
-            cover={
-              <img
-                alt="example"
-                src="https://avatars.githubusercontent.com/u/56569970?v=4"
-              />
-            }
-          >
+          <Card>
             <Meta title="孔乙己拉夫米" description="生死看淡不服就干！" />
             <div className={styles.info}>
               <p>

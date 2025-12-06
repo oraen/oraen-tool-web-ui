@@ -75,6 +75,35 @@ export const routerConfig = [
     ],
   },
   {
+    title: "专业工具",
+    path: "/professionalUtil",
+    m_id: 6,
+    parent_m_id: null,
+    icon: "icon_list",
+    keep_alive: "false",
+    order: 3,
+    children: [
+      {
+        title: "颜色工具",
+        path: "/colorUtil",
+        m_id: 61,
+        parent_m_id: 6,
+        icon: null,
+        keep_alive: "false",
+        order: 1,
+      },
+      {
+        title: "二维码工具",
+        path: "/qrcodeUtil",
+        m_id: 62,
+        parent_m_id: 6,
+        icon: null,
+        keep_alive: "false",
+        order: 2,
+      }
+    ],
+  },
+  {
     title: "关于",
     path: "/about",
     m_id: 5,
