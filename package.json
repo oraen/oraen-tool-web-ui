@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "electron": "electron .",
-    "electron:build": "npm run build && electron-builder"
+    "electron:build": "npm run build && electron-builder",
+    "build:win": "cross-env USE_SYMBOLIC_LINKS=false USE_HARD_LINKS=false electron-builder"
   },
   "build": {
     "appId": "com.oraen.toolbox",
