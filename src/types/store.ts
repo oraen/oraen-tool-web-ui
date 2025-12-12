@@ -1,6 +1,7 @@
 import { MenuState } from "./menu"
 import { LayoutMode } from "./layout"
 import { StateTheme } from "./theme"
+import { TextUtilState } from "@/store/textUtil/reducer"
 
 export interface componentsVisible {
   footer: boolean
@@ -12,4 +13,5 @@ export default interface State {
   layout: LayoutMode[]
   componentsVisible: componentsVisible
   theme: StateTheme
+  textUtil: TextUtilState
 }

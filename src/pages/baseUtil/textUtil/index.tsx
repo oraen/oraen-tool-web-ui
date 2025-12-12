@@ -3,6 +3,7 @@ import {Input, Button, Row, Col, Card, Space, message, Modal} from 'antd';
 import { isJson, isXml, isSql, isCsv, formatJson, formatXml, formatSql, formatCsv } from '../../../common/common';
 import {Editor} from "@monaco-editor/react";
 import { Typography } from 'antd';
+import { useTextUtil } from '@/store/textUtil/hooks';
 
 const { Text } = Typography; // 解构出 Text 组件
 
@@ -19,10 +20,18 @@ const placeholderText =
 `;
 
 const TextUtil: React.FC = () => {
-  const [inputText, setInputText] = useState('');
+  // 使用 Redux 管理文本内容，实现跨页面持久化
+  const { inputText, setText } = useTextUtil();
+
   const editorRef = useRef<any>(null); // 用于获取 TextArea 的 DOM 元素
   const [hintText, setHintText] = useState('');
   const [formatType, setFormatType] = useState('json');
+  const [editorLoading, setEditorLoading] = useState(true); // 编辑器加载状态
+  const [editorError, setEditorError] = useState(false); // 编辑器加载错误状态
+  const initialTimeoutRef = useRef<NodeJS.Timeout | null>(null); // 初始加载超时计时器
+  const statusCheckIntervalRef = useRef<NodeJS.Timeout | null>(null); // 状态检查定时器
+  const retryCountRef = useRef(0); // 重试次数
+  const editorInstanceRef = useRef<any>(null); // Monaco Editor 实例的引用
 
   const [isModalVisible, setIsModalVisible] = useState(false); // 控制弹窗显示
   const [wrapString, setWrapString] = useState(''); // 用户输入的换行字符串
@@ -142,38 +151,113 @@ const TextUtil: React.FC = () => {
     setWrapString(''); // 清空输入框
   };
 
-  // 模拟用户输入，保留撤销栈
+  // 模拟用户输入，保留撤销栈（同时支持编辑器和文本框）
   const updateText = (newText: string) => {
-    if (editorRef.current) {
+    if (editorRef.current && !editorError) {
+      // Monaco Editor 模式
       const editor = editorRef.current;
       const model = editor.getModel(); // 获取编辑器的模型
-      const fullRange = model.getFullModelRange(); // 获取整个文本的范围
+      if (model) {
+        const fullRange = model.getFullModelRange(); // 获取整个文本的范围
 
-      // 使用 executeEdits 更新内容，保留撤销栈
-      editor.executeEdits('update-text', [
-        {
-          range: fullRange, // 替换整个文本
-          text: newText, // 新内容
-          forceMoveMarkers: true, // 强制移动光标
-        },
-      ]);
+        // 使用 executeEdits 更新内容，保留撤销栈
+        editor.executeEdits('update-text', [
+          {
+            range: fullRange, // 替换整个文本
+            text: newText, // 新内容
+            forceMoveMarkers: true, // 强制移动光标
+          },
+        ]);
 
-      // 将光标移动到文本末尾
-      editor.setPosition({
-        lineNumber: model.getLineCount(),
-        column: model.getLineMaxColumn(model.getLineCount()),
-      });
+        // 将光标移动到文本末尾
+        editor.setPosition({
+          lineNumber: model.getLineCount(),
+          column: model.getLineMaxColumn(model.getLineCount()),
+        });
+      }
     }
-    setInputText(newText); // 更新状态
-
-
-
+    // 无论哪种模式，都更新状态（备用文本框会直接使用这个状态）
+    setText(newText);
   };
 
   // 获取 Editor 实例
   const handleEditorMount = (editor: any) => {
     editorRef.current = editor; // 保存 Editor 实例
+    editorInstanceRef.current = editor; // 保存到另一个引用
+    setEditorLoading(false); // 编辑器加载完成
+    setEditorError(false); // 确保错误状态被清除
+    retryCountRef.current = 0; // 重置重试次数
+
+    // 清除所有定时器
+    if (initialTimeoutRef.current) {
+      clearTimeout(initialTimeoutRef.current);
+      initialTimeoutRef.current = null;
+    }
+    if (statusCheckIntervalRef.current) {
+      clearInterval(statusCheckIntervalRef.current);
+      statusCheckIntervalRef.current = null;
+    }
+
+    console.log('✅ 编辑器加载成功');
   };
+
+  // 检查编辑器加载状态
+  const checkEditorStatus = () => {
+    // 检查 Monaco Editor 是否在 DOM 中且可用
+    const monacoExists = document.querySelector('.monaco-editor') !== null;
+    const hasError = document.querySelector('.monaco-editor.error') !== null;
+
+    if (hasError || (!monacoExists && !editorRef.current)) {
+      // 检测到真正的错误,进行重新加载
+      console.log('❌ 检测到编辑器加载失败,尝试重新加载...');
+      retryCountRef.current += 1;
+
+      // 强制重新加载编辑器
+      setEditorLoading(true);
+      setEditorError(false);
+
+      // 给一点时间让组件重新渲染
+      setTimeout(() => {
+        if (!editorRef.current) {
+          setEditorLoading(false);
+          setEditorError(true);
+        }
+      }, 2000);
+    } else if (monacoExists || editorRef.current) {
+      // 编辑器存在,继续等待加载完成
+      console.log('⏳ 编辑器加载中,继续等待...');
+    }
+  };
+
+  // 启动状态检查(每10秒检查一次)
+  const startStatusCheck = () => {
+    statusCheckIntervalRef.current = setInterval(() => {
+      checkEditorStatus();
+    }, 10000); // 每10秒检查一次
+  };
+
+  // 监听编辑器初始加载
+  useEffect(() => {
+    // 给编辑器 15 秒的初始加载时间
+    initialTimeoutRef.current = setTimeout(() => {
+      if (!editorRef.current) {
+        console.log('⏰ 初始加载超时,切换到备用模式,开始状态监测');
+        setEditorLoading(false);
+        setEditorError(true);
+        // 开始定期检查编辑器状态
+        startStatusCheck();
+      }
+    }, 1500);
+
+    return () => {
+      if (initialTimeoutRef.current) {
+        clearTimeout(initialTimeoutRef.current);
+      }
+      if (statusCheckIntervalRef.current) {
+        clearInterval(statusCheckIntervalRef.current);
+      }
+    };
+  }, []);
 
   // 转大写
   const handleUpperCase = () => {
@@ -679,23 +763,6 @@ const TextUtil: React.FC = () => {
     }
   };
 
-  // 正则匹配（待实现）
-  const handleRegexMatch = () => {
-    // TODO: 实现正则匹配逻辑
-    message.info('正则匹配功能待实现');
-  };
-
-  // 删除字符（待实现）
-  const handleTextStatistics = () => {
-    // TODO: 实现删除字符逻辑
-    message.info('删除字符功能待实现');
-  };
-
-  // 文本替换（待实现）
-  const handleTextReplace = () => {
-    // TODO: 实现文本替换逻辑
-    message.info('文本替换功能待实现');
-  };
 
   // 复制内容
   const handleCopyToClipboard = () => {
@@ -728,7 +795,7 @@ const TextUtil: React.FC = () => {
   };
 
   const onChangeText = (newStr: string) => {
-    setInputText(newStr);
+    setText(newStr);
     let trim = newStr.trim()
     if(trim != null && trim.length > 0){
       const firstChar = trim[0];
@@ -763,31 +830,77 @@ const TextUtil: React.FC = () => {
           </Col>
 
           <Col span={24} style={{height: '50vh', position: 'relative'}}>
-            <Editor
-              height="100%"
-              language={formatType}
-              value={inputText}
-              onChange={(newValue) => onChangeText(newValue == null ? '' : newValue)}
-              theme="vs-light"
-              options={{
-                fontSize: 14,
-                minimap: {enabled: false},
-                wordWrap: 'on',
-              }}
-              onMount={handleEditorMount} // 获取 Editor 实例
-            />
-            {!inputText && (
-              <div
-                style={{
+            {!editorError ? (
+              <>
+                <Editor
+                  key={`editor-${retryCountRef.current}`} // 添加 key 强制重新挂载
+                  height="100%"
+                  language={formatType}
+                  value={inputText}
+                  onChange={(newValue) => onChangeText(newValue == null ? '' : newValue)}
+                  theme="vs-light"
+                  loading={<div style={{display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%'}}>编辑器加载中...</div>}
+                  options={{
+                    fontSize: 14,
+                    minimap: {enabled: false},
+                    wordWrap: 'on',
+                  }}
+                  onMount={handleEditorMount}
+                />
+                {!inputText && !editorLoading && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 15,
+                      left: 30,
+                      color: '#bfbfbf',
+                      pointerEvents: 'none',
+                      whiteSpace: 'pre-line',
+                    }}
+                  >
+                    {placeholderText}
+                  </div>
+                )}
+              </>
+            ) : (
+              // 备用文本框（当编辑器加载失败时显示）
+              <div style={{position: 'relative', height: '100%'}}>
+                <TextArea
+                  ref={(ref) => {
+                    // 将备用文本框的引用也保存，方便操作
+                    if (ref) {
+                      editorRef.current = {
+                        getValue: () => inputText,
+                        setValue: (value: string) => setText(value),
+                      };
+                    }
+                  }}
+                  rows={20}
+                  value={inputText}
+                  onChange={(e) => onChangeText(e.target.value)}
+                  placeholder={placeholderText}
+                  style={{
+                    fontSize: 14,
+                    fontFamily: 'Consolas, Monaco, monospace',
+                    height: '100%',
+                    resize: 'none'
+                  }}
+                />
+                <div style={{
                   position: 'absolute',
-                  top: 15,
-                  left: 30,
-                  color: '#bfbfbf',
-                  pointerEvents: 'none',
-                  whiteSpace: 'pre-line',
-                }}
-              >
-                {placeholderText}
+                  bottom: 10,
+                  right: 10,
+                  fontSize: 12,
+                  color: '#999',
+                  background: '#fff',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  border: '1px solid #d9d9d9'
+                }}>
+                  {retryCountRef.current > 0
+                    ? `后台监测中... (已重试 ${retryCountRef.current} 次)`
+                    : '编辑器加载中，暂用备用模式...'}
+                </div>
               </div>
             )}
           </Col>

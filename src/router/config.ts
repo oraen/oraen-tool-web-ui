@@ -71,6 +71,14 @@ export const routerConfig = [
         parent_m_id: 4,
         keep_alive: "false",
         order: 1,
+      },
+      {
+        title: "文件加密",
+        path: "/encryption",
+        m_id: 42,
+        parent_m_id: 4,
+        keep_alive: "false",
+        order: 2,
       }
     ],
   },

@@ -54,7 +54,7 @@ const App: React.FC = () => {
                   <MailOutlined/> 邮箱: oraen1998@gmail.com
                 </div>
                 <div>
-                  <QrcodeOutlined/> 微信公众号: 牙膏盒
+                  <QrcodeOutlined/> 微信公众号: 牙膏盒（欢迎留言）
                   <div
                     style={{width: '100px', height: '100px', backgroundColor: '#f0f0f0'}}>
                     <img
@@ -96,20 +96,20 @@ const App: React.FC = () => {
         <Divider/>
 
         <Row gutter={[16, 16]}>
-          {/* 网站初衷 */}
+          {/* 网站使命 */}
           <Col span={12}>
             <Card title="网站初衷" bordered={false}>
               <Paragraph>
-                网站的设计初衷是为了方便每一个开发者，让开发者们不需要登录，不需要关注，也不需要看广告，就能用上好用快捷的工具，提升工作效率。
+                让天下没有难用的工具。
               </Paragraph>
             </Card>
           </Col>
 
-          {/* 未来计划 */}
+          {/* 网站发展 */}
           <Col span={12}>
             <Card title="未来计划" bordered={false}>
               <Paragraph>
-                我们会继续完善和扩展工具，欢迎大家报告BUG和提意见和建议，欢迎新同学一起加入我们的开发。
+                欢迎在公众号留下宝贵的建议或者报告BUG。
               </Paragraph>
             </Card>
           </Col>

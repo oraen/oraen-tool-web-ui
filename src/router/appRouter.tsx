@@ -6,9 +6,9 @@ const RouterBasename = '/'
 function AppRouter() {
 
   return (
-    <BrowserRouter basename={RouterBasename}>
+    <HashRouter>
       <Layout />
-    </BrowserRouter>
+    </HashRouter>
   );
 }
 
