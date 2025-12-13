@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Card, Upload, Input, Button, Space, Typography, message, Tabs, Row, Col } from 'antd';
-import { UploadOutlined, LockOutlined, UnlockOutlined, DownloadOutlined } from '@ant-design/icons';
+import { UploadOutlined, LockOutlined, UnlockOutlined, DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { UploadFile } from 'antd/es/upload/interface';
 import CryptoJS from 'crypto-js';
 
@@ -28,10 +28,37 @@ const FileEncryption: React.FC = () => {
     });
   };
 
+  // 生成随机密码
+  const generateRandomPassword = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let password = '';
+    // 生成 16 个字符（4个分组，每个4个字符，共16个字符）
+    for (let i = 0; i < 16; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+      // 在第 4、8、12 个字符后添加分隔符
+      if ((i + 1) % 4 === 0 && i < 15) {
+        password += '-';
+      }
+    }
+    return password;
+  };
+
+  // 处理生成密码按钮点击
+  const handleGeneratePassword = () => {
+    const newPassword = generateRandomPassword();
+    setEncryptPassword(newPassword);
+    // 复制到剪贴板
+    navigator.clipboard.writeText(newPassword).then(() => {
+      message.success('密码已生成并复制到剪贴板');
+    }).catch(() => {
+      message.success('密码已生成（复制失败，请手动复制）');
+    });
+  };
+
   // AES 加密文件
   const handleEncrypt = async () => {
     if (!encryptFile) {
-      message.warning('请先上传文件');
+      message.warning('请先选择文件');
       return;
     }
     if (!encryptPassword) {
@@ -44,11 +71,11 @@ const FileEncryption: React.FC = () => {
       // 读取文件内容
       const arrayBuffer = await readFileAsArrayBuffer(encryptFile);
       const originalWordArray = CryptoJS.lib.WordArray.create(arrayBuffer as any);
-      
+
       // 创建校验字符串
       const validator = 'ORAEN_VALID_' + Date.now();
       const validatorWordArray = CryptoJS.enc.Utf8.parse(validator);
-      
+
       // 新建标头：校验字符串 + 原文件数据
       const headerAndData = {
         validator: validator,
@@ -57,21 +84,21 @@ const FileEncryption: React.FC = () => {
       };
       const headerAndDataJson = JSON.stringify(headerAndData);
       const headerAndDataWordArray = CryptoJS.enc.Utf8.parse(headerAndDataJson);
-      
+
       // 使用 AES 加密（校验字符串 + 原文件数据）
       const encrypted = CryptoJS.AES.encrypt(headerAndDataWordArray, encryptPassword).toString();
-      
+
       // 创建最终的文件结构
       const fileStructure = {
         oraen_magic: 'CORKI_TSE',
         data: encrypted
       };
       const fileContent = JSON.stringify(fileStructure);
-      
+
       // 创建加密后的文件
       const blob = new Blob([fileContent], { type: 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
-      
+
       // 下载文件
       const link = document.createElement('a');
       link.href = url;
@@ -80,7 +107,7 @@ const FileEncryption: React.FC = () => {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      
+
       message.success('文件加密成功！');
       setEncryptFile(null);
       setEncryptPassword('');
@@ -91,11 +118,9 @@ const FileEncryption: React.FC = () => {
       setEncryptLoading(false);
     }
   };
-
-  // AES 解密文件
   const handleDecrypt = async () => {
     if (!decryptFile) {
-      message.warning('请先上传加密文件');
+      message.warning('请先选择加密文件');
       return;
     }
     if (!decryptPassword) {
@@ -103,7 +128,7 @@ const FileEncryption: React.FC = () => {
       return;
     }
     if (!decryptFile.name.endsWith('.olock')) {
-      message.warning('请上传 .olock 格式的加密文件');
+      message.warning('请选择 .olock 格式的加密文件');
       return;
     }
 
@@ -111,14 +136,14 @@ const FileEncryption: React.FC = () => {
     try {
       // 读取加密文件内容
       const text = await decryptFile.text();
-      
+
       // 解析 JSON 文件头
       let fileStructure;
       let encryptedData;
       try {
         fileStructure = JSON.parse(text);
         encryptedData = fileStructure.data;
-        
+
         // 验证文件头
         if (fileStructure.oraen_magic !== 'CORKI_TSE') {
           message.error('文件格式错误或文件已损坏');
@@ -130,10 +155,10 @@ const FileEncryption: React.FC = () => {
         setDecryptLoading(false);
         return;
       }
-      
+
       // 使用 AES 解密
       const decrypted = CryptoJS.AES.decrypt(encryptedData, decryptPassword);
-      
+
       // 解析解密器输出的 UTF-8 字符串
       let headerAndDataJson: string;
       try {
@@ -143,14 +168,14 @@ const FileEncryption: React.FC = () => {
         setDecryptLoading(false);
         return;
       }
-      
+
       // 检查解密不成功（乱码）
       if (!headerAndDataJson || headerAndDataJson.length === 0) {
         message.error('密码错误，无法解密文件');
         setDecryptLoading(false);
         return;
       }
-      
+
       // 解析校验数据
       let headerAndData;
       try {
@@ -160,19 +185,19 @@ const FileEncryption: React.FC = () => {
         setDecryptLoading(false);
         return;
       }
-      
+
       // 检查校验字符串是否存在（校验密码是否正确）
       if (!headerAndData.validator || !headerAndData.validator.startsWith('ORAEN_VALID_')) {
         message.error('密码错误，无法解密文件');
         setDecryptLoading(false);
         return;
       }
-      
+
       // 从 Base64 恢复原文件数据（验证字符串和大小信息已经执行完，仅需还原原始文件）
       const originalWordArray = CryptoJS.enc.Base64.parse(headerAndData.data);
       const arrayBuffer = new ArrayBuffer(originalWordArray.words.length * 4);
       const uint8Array = new Uint8Array(arrayBuffer);
-      
+
       for (let i = 0; i < originalWordArray.words.length; i++) {
         const word = originalWordArray.words[i];
         uint8Array[i * 4] = (word >> 24) & 0xff;
@@ -180,11 +205,11 @@ const FileEncryption: React.FC = () => {
         uint8Array[i * 4 + 2] = (word >> 8) & 0xff;
         uint8Array[i * 4 + 3] = word & 0xff;
       }
-      
+
       // 创建解密后的文件
       const blob = new Blob([uint8Array], { type: 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
-      
+
       // 下载文件（去掉 .olock 后缀）
       const originalName = decryptFile.name.replace('.olock', '');
       const link = document.createElement('a');
@@ -194,7 +219,7 @@ const FileEncryption: React.FC = () => {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      
+
       message.success('文件解密成功！');
       setDecryptFile(null);
       setDecryptPassword('');
@@ -218,7 +243,7 @@ const FileEncryption: React.FC = () => {
           <TabPane tab={<span><LockOutlined />文件加密</span>} key="encrypt">
             <Row gutter={[24, 24]}>
               <Col span={24} md={12}>
-                <Card title="上传文件" bordered={false} style={{ height: '100%' }}>
+                <Card title="选择文件" bordered={false} style={{ height: '100%' }}>
                   <Space direction="vertical" style={{ width: '100%' }} size="large">
                     <Upload
                       maxCount={1}
@@ -238,13 +263,25 @@ const FileEncryption: React.FC = () => {
                       </Button>
                     </Upload>
 
-                    <Input.Password
-                      size="large"
-                      placeholder="请输入加密密码"
-                      value={encryptPassword}
-                      onChange={(e) => setEncryptPassword(e.target.value)}
-                      prefix={<LockOutlined />}
-                    />
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <Input.Password
+                        size="large"
+                        placeholder="请输入加密密码"
+                        value={encryptPassword}
+                        onChange={(e) => setEncryptPassword(e.target.value)}
+                        prefix={<LockOutlined />}
+                        style={{ flex: 1 }}
+                      />
+                      <Button
+                        type="default"
+                        size="large"
+                        icon={<ReloadOutlined />}
+                        onClick={handleGeneratePassword}
+                        title="随机生成密码"
+                      >
+                        生成
+                      </Button>
+                    </div>
 
                     <Button
                       type="primary"
@@ -268,6 +305,7 @@ const FileEncryption: React.FC = () => {
                     <Text>• 输入一个强密码（建议使用字母+数字+符号）</Text>
                     <Text>• 点击"加密并下载"按钮</Text>
                     <Text>• 加密后的文件将自动下载，文件名后缀为 .olock</Text>
+                    <Text>• 加密解密全程在本地完成</Text>
                     <Text type="warning">• 请务必记住密码，密码丢失将无法解密！</Text>
                     <Text type="secondary" style={{ fontSize: 12, marginTop: 16 }}>
                       有问题可以在概括页留言
@@ -282,7 +320,7 @@ const FileEncryption: React.FC = () => {
           <TabPane tab={<span><UnlockOutlined />文件解密</span>} key="decrypt">
             <Row gutter={[24, 24]}>
               <Col span={24} md={12}>
-                <Card title="上传加密文件" bordered={false} style={{ height: '100%' }}>
+                <Card title="选择加密文件" bordered={false} style={{ height: '100%' }}>
                   <Space direction="vertical" style={{ width: '100%' }} size="large">
                     <Upload
                       maxCount={1}

@@ -4,6 +4,7 @@ import { isJson, isXml, isSql, isCsv, formatJson, formatXml, formatSql, formatCs
 import {Editor} from "@monaco-editor/react";
 import { Typography } from 'antd';
 import { useTextUtil } from '@/store/textUtil/hooks';
+import { preloadMonaco } from '@/utils/monacoLoader';
 
 const { Text } = Typography; // 解构出 Text 组件
 
@@ -238,6 +239,12 @@ const TextUtil: React.FC = () => {
 
   // 监听编辑器初始加载
   useEffect(() => {
+    // 预加载 Monaco chunks (后台异步加载，不阻塞主线程)
+    preloadMonaco().catch(err => {
+      console.warn('Monaco preload failed:', err);
+      // 预加载失败不影响页面，编辑器会使用原始加载方式
+    });
+
     // 给编辑器 15 秒的初始加载时间
     initialTimeoutRef.current = setTimeout(() => {
       if (!editorRef.current) {
@@ -443,16 +450,43 @@ const TextUtil: React.FC = () => {
     }
   };
 
-  // UTF8 编码（待实现）
+  // UTF8 编码
   const handleUtf8Encode = () => {
-    // TODO: 实现 UTF8 编码逻辑
-    message.info('UTF8 编码功能待实现');
+    try {
+      // 将字符串编码为 UTF8 字节序列，使用 escape 和 String.fromCharCode 的反向操作
+      const encoded = unescape(encodeURIComponent(inputText));
+      // 转换为十六进制表示
+      const hexString = encoded
+        .split('')
+        .map((char) => '\\x' + char.charCodeAt(0).toString(16).padStart(2, '0'))
+        .join('');
+      updateText(hexString);
+    } catch (e) {
+      message.error('UTF8 编码失败，请检查输入内容');
+    }
   };
 
-  // UTF8 解码（待实现）
+  // UTF8 解码
   const handleUtf8Decode = () => {
-    // TODO: 实现 UTF8 解码逻辑
-    message.info('UTF8 解码功能待实现');
+    try {
+      // 检查输入是否为有效的 UTF8 十六进制格式（\xXX）
+      if (!/^(?:\\x[0-9a-fA-F]{2})+$/.test(inputText)) {
+        throw new Error('无效的 UTF8 编码格式，应为 \\xXX 格式');
+      }
+
+      // 从十六进制转换回字符
+      const decodedText = inputText
+        .split('\\x')
+        .filter(hex => hex.length > 0)
+        .map((hex) => String.fromCharCode(parseInt(hex, 16)))
+        .join('');
+      
+      // 从 UTF8 字节序列解码回字符
+      const utf8Decoded = decodeURIComponent(escape(decodedText));
+      updateText(utf8Decoded);
+    } catch (e) {
+      message.error('UTF8 解码失败，请输入有效的 UTF8 编码字符串');
+    }
   };
 
   // ASCII（2）编码
