@@ -4,7 +4,6 @@ import { isJson, isXml, isSql, isCsv, formatJson, formatXml, formatSql, formatCs
 import {Editor} from "@monaco-editor/react";
 import { Typography } from 'antd';
 import { useTextUtil } from '@/store/textUtil/hooks';
-import { preloadMonaco } from '@/utils/monacoLoader';
 
 const { Text } = Typography; // 解构出 Text 组件
 
@@ -75,7 +74,6 @@ const TextUtil: React.FC = () => {
     setSourceString('');
     setTargetString('');
   };
-
 
 
   //文本统计
@@ -239,12 +237,6 @@ const TextUtil: React.FC = () => {
 
   // 监听编辑器初始加载
   useEffect(() => {
-    // 预加载 Monaco chunks (后台异步加载，不阻塞主线程)
-    preloadMonaco().catch(err => {
-      console.warn('Monaco preload failed:', err);
-      // 预加载失败不影响页面，编辑器会使用原始加载方式
-    });
-
     // 给编辑器 15 秒的初始加载时间
     initialTimeoutRef.current = setTimeout(() => {
       if (!editorRef.current) {
