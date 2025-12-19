@@ -1,6 +1,6 @@
 import React from 'react';
 import { Layout, Menu, Avatar, Typography, Row, Col, Card, Divider, Space } from 'antd';
-import {MailOutlined, QrcodeOutlined, LinkOutlined, GlobalOutlined, LinkedinFilled} from '@ant-design/icons';
+import {MailOutlined, QrcodeOutlined, LinkOutlined, GlobalOutlined, LinkedinFilled, GithubOutlined} from '@ant-design/icons';
 import corkiAvatar from '../../../resource/wu537.jpg';
 import bearAvatar from '../../../resource/bear2.jpg';
 import qrcodeImage from '../../../resource/ewm.jpg';
@@ -46,9 +46,9 @@ const App: React.FC = () => {
             </Card>
           </Col>
 
-          {/* 联系方式 */}
+          {/* 关于作者 */}
           <Col span={12}>
-            <Card title="联系方式" bordered={false}>
+            <Card title="关于作者" bordered={false}>
               <Space direction="vertical" size="middle">
                 <div>
                   <MailOutlined/> 邮箱: oraen1998@gmail.com
@@ -65,7 +65,7 @@ const App: React.FC = () => {
                   </div>
                 </div>
                 <div>
-                  <LinkedinFilled/> LinkedIn地址:
+                  <LinkedinFilled/> LinkedIn地址:{' '}
                   <a
                     href="https://www.linkedin.com/in/corki-tse/"
                     target="_blank"
@@ -75,13 +75,23 @@ const App: React.FC = () => {
                   </a>
                 </div>
                 <div>
-                  <LinkOutlined/> CSDN地址:
+                  <LinkOutlined/> CSDN地址:{' '}
                   <a
                     href="https://blog.csdn.net/pass_JMC?type=blog"
                     target="_blank"
                     rel="noopener noreferrer"
                   >
                     我的CSDN主页
+                  </a>
+                </div>
+                <div>
+                  <GithubOutlined/> GitHub:{' '}
+                  <a
+                    href="https://github.com/oraen"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    github.com/oraen
                   </a>
                 </div>
                 <div>
@@ -100,17 +110,36 @@ const App: React.FC = () => {
           <Col span={12}>
             <Card title="网站初衷" bordered={false}>
               <Paragraph>
-                让天下没有难用的工具。
+                好用的工具。
               </Paragraph>
             </Card>
           </Col>
 
           {/* 网站发展 */}
           <Col span={12}>
-            <Card title="未来计划" bordered={false}>
-              <Paragraph>
-                欢迎在公众号留下宝贵的建议或者报告BUG。
-              </Paragraph>
+            <Card title="关于项目" bordered={false}>
+              <Space direction="vertical" size="middle">
+                <div>
+                  <LinkOutlined/> 使用教程:{' '}
+                  <a
+                    href="https://blog.csdn.net/pass_JMC/article/details/156098825"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    使用教程
+                  </a>
+                </div>
+                <div>
+                  <GithubOutlined/> 项目地址:{' '}
+                  <a
+                    href="https://github.com/oraen/oraen-tool-web-ui"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                      github项目地址
+                  </a>
+                </div>
+              </Space>
             </Card>
           </Col>
         </Row>

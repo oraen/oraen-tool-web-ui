@@ -108,6 +108,15 @@ export const routerConfig = [
         icon: null,
         keep_alive: "false",
         order: 2,
+      },
+      {
+        title: "API调试工具",
+        path: "/apiDebugTool",
+        m_id: 63,
+        parent_m_id: 6,
+        icon: null,
+        keep_alive: "false",
+        order: 3,
       }
     ],
   },
