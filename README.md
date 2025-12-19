@@ -8,6 +8,7 @@
 
 - **Windows**: https://release.oraen.com/tool/oraen-tool-v2.2.0-win.rar
 - **Mac**: https://release.oraen.com/tool/oraen-tool-v2.2.0-mac.rar
+- **历史版本**: https://release.oraen.com/tool/
 
 ## 项目功能
 
