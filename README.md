@@ -2,7 +2,12 @@
 
 一个功能强大的在线工具集，提供多种实用工具的Web应用。
 
-**官网**: https://tool.oraen.com/
+**在线工具**: https://tool.oraen.com/
+
+## 工具下载
+
+- **Windows**: https://release.oraen.com/tool/oraen-tool-v2.2.0-win.rar
+- **Mac**: https://release.oraen.com/tool/oraen-tool-v2.2.0-mac.rar
 
 ## 项目功能
 
