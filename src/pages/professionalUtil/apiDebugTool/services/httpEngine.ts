@@ -1,4 +1,4 @@
-import { HttpRequest, HttpResponse, ParamItem, HeaderItem, AuthType } from '../types';
+import { HttpRequest, HttpResponse, ParamItem, HeaderItem, AuthType, HttpMethod } from '../types';
 
 export interface RequestOptions {
   timeout?: number;
@@ -15,6 +15,44 @@ export interface RequestExecutionResult {
 }
 
 class HttpRequestEngine {
+  /**
+   * Detect if running in Electron environment
+   */
+  private isElectron(): boolean {
+    // Multiple detection methods for reliability
+    if (typeof window === 'undefined') return false;
+    
+    const win = window as any;
+    
+    // Method 1: Check for exposed electron object from preload
+    if (win.electron?.isElectron === true) {
+      console.log('[HttpEngine] Detected Electron via preload');
+      return true;
+    }
+    
+    // Method 2: Check for __ELECTRON__ flag
+    if (win.__ELECTRON__ === true) {
+      console.log('[HttpEngine] Detected Electron via __ELECTRON__');
+      return true;
+    }
+    
+    // Method 3: Check user agent
+    if (navigator.userAgent.includes('Electron')) {
+      console.log('[HttpEngine] Detected Electron via user agent');
+      return true;
+    }
+    
+    // Method 4: Check for common Electron/Node globals
+    if (typeof (win.require) === 'function' || typeof (win.process) === 'object') {
+      if (win.process?.type === 'renderer') {
+        console.log('[HttpEngine] Detected Electron via process object');
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
   /**
    * Build URL with parameters
    */
@@ -33,7 +71,7 @@ class HttpRequestEngine {
   /**
    * Build request headers
    */
-  private buildHeaders(headers: HeaderItem[], auth?: any): Record<string, string> {
+  private buildHeaders(headers: HeaderItem[], body?: any, bodyType?: string, rawFormat?: string): Record<string, string> {
     const result: Record<string, string> = {};
 
     // Add enabled headers
@@ -44,18 +82,41 @@ class HttpRequestEngine {
       });
 
     // Set default Content-Type if not provided
+    // Skip auto-setting if body is FormData (browser will handle it automatically)
     if (!result['Content-Type']) {
-      result['Content-Type'] = 'application/json';
+      // For form-data, let the browser automatically set Content-Type with boundary
+      if (body instanceof FormData) {
+        // Browser/Electron will automatically set Content-Type: multipart/form-data
+        // Do not set it manually
+      } else if (bodyType === 'x-www-form-urlencoded') {
+        result['Content-Type'] = 'application/x-www-form-urlencoded';
+      } else if (bodyType === 'raw') {
+        // For raw body, only set Content-Type based on selected format
+        // This matches Postman behavior
+        if (rawFormat === 'json') {
+          result['Content-Type'] = 'application/json';
+        } else if (rawFormat === 'xml') {
+          result['Content-Type'] = 'application/xml';
+        }
+        // For 'text' (HTML) format, don't set Content-Type
+        // Let server handle content negotiation
+      }
     }
 
     return result;
   }
 
   /**
-   * Build request body
+   * Build request body - GET/HEAD methods should not have a body
    */
   private buildBody(request: HttpRequest): string | FormData | null {
-    const { body } = request;
+    const { body, method } = request;
+
+    // GET and HEAD methods should not have a request body per HTTP spec
+    // Ignore any body content for these methods
+    if (method === HttpMethod.GET) {
+      return null;
+    }
 
     if (body.type === 'none' || !body.type) {
       return null;
@@ -118,53 +179,133 @@ class HttpRequestEngine {
     const startTime = performance.now();
     const timeout = options.timeout || 30000;
     const controller = new AbortController();
-
-    // Create timeout
     let timeoutId: NodeJS.Timeout | undefined;
-    if (timeout > 0) {
-      timeoutId = setTimeout(() => {
-        controller.abort();
-      }, timeout);
+
+    // Validate URL format
+    try {
+      const urlObj = new URL(request.url);
+      // Additional validation: URL should have a valid protocol
+      if (!urlObj.protocol.match(/^https?:$/)) {
+        return {
+          error: {
+            message: `Invalid URL protocol. Only http:// and https:// are supported. Got: ${urlObj.protocol}`,
+            code: 'INVALID_URL',
+          },
+          duration: performance.now() - startTime,
+        };
+      }
+    } catch (err: any) {
+      return {
+        error: {
+          message: `Invalid URL format: ${err.message}. Please enter a valid URL starting with http:// or https://`,
+          code: 'INVALID_URL',
+        },
+        duration: performance.now() - startTime,
+      };
     }
 
     try {
+      // Create timeout
+      if (timeout > 0) {
+        timeoutId = setTimeout(() => {
+          controller.abort();
+        }, timeout);
+      }
+
       // Build URL with parameters
       const url = this.buildUrl(request.url, request.params);
 
-      // Build headers
-      const headers = this.buildHeaders(request.headers);
-
-      // Build body
+      // Build body first to determine content type
       const body = this.buildBody(request);
 
-      // Make fetch request
-      const fetchResponse = await fetch(url, {
+      // Build headers (pass body for content-type detection)
+      const rawFormat = request.body.type === 'raw' ? request.body.raw?.format : undefined;
+      const headers = this.buildHeaders(request.headers, body, request.body.type, rawFormat);
+
+      // Make request
+      const isElectronEnv = this.isElectron();
+      
+      // Debug logging
+      console.log('[HttpEngine] Request Debug:', {
+        url,
         method: request.method,
-        headers: headers as any,
-        body: body as any,
-        signal: options.signal || controller.signal,
-        mode: 'cors',
-        credentials: 'include',
+        bodyType: request.body.type,
+        rawFormat: request.body.type === 'raw' ? request.body.raw?.format : undefined,
+        isElectron: isElectronEnv,
+        headers: Object.keys(headers),
       });
+      
+      let fetchResponse;
+      
+      // In Electron, use IPC to make request in main process (no CORS issues)
+      // In browser, use fetch API
+      if (isElectronEnv && (window as any).electron?.makeRequest) {
+        // Use native Node.js http/https in main process - completely bypasses CORS
+        console.log('[HttpEngine] Using IPC for request');
+        
+        const ipcResponse = await (window as any).electron.makeRequest({
+          url,
+          method: request.method,
+          headers,
+          body: typeof body === 'string' ? body : null,
+        });
+
+        console.log('[HttpEngine] IPC Response:', {
+          hasError: !!ipcResponse.error,
+          status: ipcResponse.status,
+          bodyLength: ipcResponse.body?.length,
+        });
+
+        if (ipcResponse.error) {
+          console.error('[HttpEngine] IPC Error:', ipcResponse.error);
+          throw new Error(`IPC Error: ${ipcResponse.error.message} (${ipcResponse.error.code})`);
+        }
+
+        // Convert IPC response to fetch-like response
+        fetchResponse = {
+          ok: ipcResponse.status >= 200 && ipcResponse.status < 300,
+          status: ipcResponse.status,
+          statusText: ipcResponse.statusText,
+          headers: new Map(Object.entries(ipcResponse.headers || {})),
+          text: async () => ipcResponse.body,
+        };
+      } else {
+        // Browser: use fetch with CORS
+        console.log('[HttpEngine] Using Fetch API for request');
+        
+        const fetchOptions: any = {
+          method: request.method,
+          headers: headers as any,
+          body: body as any,
+          signal: options.signal || controller.signal,
+          mode: 'cors',
+          credentials: 'include',
+        };
+        
+        fetchResponse = await fetch(url, fetchOptions);
+      }
 
       // Read response body
-      const responseBody = await fetchResponse.text();
-      const contentType = fetchResponse.headers.get('Content-Type') || 'text/plain';
+      const responseBody = await (fetchResponse.text instanceof Function ? fetchResponse.text() : fetchResponse.text);
+      const contentType = fetchResponse.headers.get?.('Content-Type') ||
+                         fetchResponse.headers.get?.('content-type') ||
+                         'text/plain';
       const responseTime = performance.now() - startTime;
       const responseSize = this.calculateResponseSize(responseBody);
 
       // Parse response headers
       const responseHeaders: Record<string, string> = {};
-      fetchResponse.headers.forEach((value, key) => {
-        responseHeaders[key] = value;
+      fetchResponse.headers.forEach((value: any, key: string) => {
+        responseHeaders[key] = String(value);
       });
 
+      const contentTypeForDetection = typeof contentType === 'string' ? contentType : 'text/plain';
       const response: HttpResponse = {
         status: fetchResponse.status,
         statusText: fetchResponse.statusText,
         headers: responseHeaders,
         body: responseBody,
-        bodyType: this.detectBodyType(contentType, responseBody),
+        bodyType: this.detectBodyType(contentTypeForDetection, responseBody),
         responseTime,
         responseSize,
         receivedAt: Date.now(),
@@ -188,26 +329,71 @@ class HttpRequestEngine {
       }
 
       if (error instanceof TypeError) {
-        // Detect CORS errors
+        // Detect error type
         const errorMsg = error.message || '';
-        const isCorsError = errorMsg.includes('Failed to fetch') || 
-                          errorMsg.includes('fetch') ||
-                          errorMsg.includes('NetworkError') ||
-                          !navigator.onLine;
         
-        if (isCorsError) {
+        // Check if it's a GET/HEAD with body error (HTTP spec violation)
+        if (errorMsg.includes('GET/HEAD method cannot have body') || 
+            errorMsg.includes('Request with GET/HEAD method cannot have body')) {
+          console.error('[HttpEngine] Invalid HTTP request - GET/HEAD cannot have body');
           return {
             error: {
-              message: 'Request failed due to CORS (Cross-Origin). Please use a professional HTTP client or browser extension.',
+              message: `Invalid HTTP request: ${errorMsg}. GET/HEAD methods cannot have a request body. Please change the method to POST or another appropriate method.`,
+              code: 'INVALID_REQUEST',
+            },
+            duration,
+          };
+        }
+        
+        // Distinguish between CORS errors and other network errors
+        // In browser environment, "Failed to fetch" can be CORS or DNS/network errors
+        // We cannot reliably distinguish them, so we show CORS guidance as a fallback
+        // since CORS is a common issue for API debugging in browsers
+        const isOffline = !navigator.onLine;
+        
+        console.error('[HttpEngine] Error Details:', {
+          errorMsg,
+          isOffline,
+          stack: error.stack,
+          isElectron: this.isElectron(),
+          userAgent: navigator.userAgent,
+        });
+        
+        // Handle offline case
+        if (isOffline) {
+          return {
+            error: {
+              message: 'Network is offline. Please check your internet connection.',
+              code: 'OFFLINE_ERROR',
+            },
+            duration,
+          };
+        }
+        
+        // For "Failed to fetch" errors in browser, show CORS guidance
+        // This is a common issue for API debugging
+        if (errorMsg.includes('Failed to fetch')) {
+          return {
+            error: {
+              message: `Request failed. This could be due to:
+1. CORS policy blocking the request
+2. Server is unreachable
+3. Invalid domain/hostname
+4. Network connectivity issues`,
               code: 'CORS_ERROR',
             },
             duration,
           };
         }
-
+        
+        // Handle other network errors (DNS, connection refused, timeout, etc.)
         return {
           error: {
-            message: `Network error: ${error.message}`,
+            message: `Network error: ${errorMsg}. This could be due to:
+1. Invalid domain/hostname
+2. Server connection refused
+3. Network unreachable
+4. Request timeout`,
             code: 'NETWORK_ERROR',
           },
           duration,

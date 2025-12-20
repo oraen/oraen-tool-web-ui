@@ -22,8 +22,12 @@
     },
     "files": [
       "electron.cjs",
+      "preload.cjs",
       "oraen-tool-web-ui/**/*"
     ],
+    "extraMetadata": {
+      "main": "electron.cjs"
+    },
     "win": {
       "target": [
         {

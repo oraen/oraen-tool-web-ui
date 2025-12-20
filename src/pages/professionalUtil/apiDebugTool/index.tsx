@@ -654,8 +654,21 @@ const ApiDebugTool: React.FC = () => {
           response: null,
         }));
         
-        // Handle CORS errors with special message
-        if (result.error.code === 'CORS_ERROR') {
+        // Handle different error types with specific messages
+        if (result.error.code === 'INVALID_URL') {
+          // Invalid URL format
+          message.error(result.error.message);
+        } else if (result.error.code === 'INVALID_REQUEST') {
+          // HTTP specification violation
+          message.error(result.error.message);
+        } else if (result.error.code === 'OFFLINE_ERROR') {
+          // Network offline
+          message.error(result.error.message);
+        } else if (result.error.code === 'NETWORK_ERROR') {
+          // Network error (DNS, connection refused, etc.)
+          message.error(result.error.message);
+        } else if (result.error.code === 'CORS_ERROR') {
+          // CORS-specific error
           Modal.warning({
             title: '跨域请求失败 (CORS)',
             width: 600,
@@ -679,6 +692,7 @@ const ApiDebugTool: React.FC = () => {
             okText: '确定',
           });
         } else {
+          // Generic error
           message.error(`请求失败: ${result.error.message}`);
         }
       }
@@ -2079,16 +2093,16 @@ const ApiDebugTool: React.FC = () => {
                             <label style={{ fontWeight: 'bold', margin: 0 }}>Format:</label>
                             <Radio.Group
                               value={appState.currentRequest?.body.raw?.format || RawBodyFormat.JSON}
-                              onChange={(e) => updateCurrentRequest({
-                                body: {
-                                  ...appState.currentRequest!.body,
-                                  raw: {
-                                    ...appState.currentRequest!.body.raw,
-                                    format: e.target.value,
-                                    content: appState.currentRequest!.body.raw?.content || '',
-                                  },
+                            onChange={(e) => updateCurrentRequest({
+                              body: {
+                                ...appState.currentRequest!.body,
+                                raw: {
+                                  ...appState.currentRequest!.body.raw,
+                                  format: e.target.value,
+                                  content: appState.currentRequest!.body.raw?.content || '',
                                 },
-                              })}
+                              },
+                            })}
                               style={{ display: 'flex', gap: 16 }}
                             >
                               <Radio value={RawBodyFormat.JSON}>JSON</Radio>
