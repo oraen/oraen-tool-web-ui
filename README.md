@@ -7,7 +7,8 @@
 ## 工具下载
 
 - **Windows**: https://release.oraen.com/tool/oraen-tool-v2.2.0-win.rar
-- **Mac**: https://release.oraen.com/tool/oraen-tool-v2.2.0-mac.rar
+- **Mac(Apple Silicon)**: https://release.oraen.com/tool/oraen-tool-v2.2.0-mac-arm64.dmg
+- **Mac(Intel)**: https://release.oraen.com/tool/oraen-tool-v2.2.0-mac-x86_64.dmg
 - **历史版本**: https://release.oraen.com/tool/
 
 ## 项目功能
