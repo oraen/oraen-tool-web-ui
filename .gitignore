@@ -15,7 +15,6 @@ package-lock.json
 !/theme/var.less
 /public/color.less
 /oraen-tool-web-ui
-/src/router/auto.**
 # electron build
 /release
 /dist
