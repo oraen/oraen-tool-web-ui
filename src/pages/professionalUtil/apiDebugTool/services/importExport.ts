@@ -21,8 +21,15 @@ class ImportExportService {
   exportRequestAsCurl(request: HttpRequest): string {
     let curl = `curl -X ${request.method}`;
 
-    // Add URL
-    curl += ` "${request.url}"`;
+    const url = new URL(request.url);
+    const enabledParams = (request.params || []).filter(param => param.enabled && param.key);
+    const managedKeys = new Set(enabledParams.map(param => param.key));
+    managedKeys.forEach(key => url.searchParams.delete(key));
+    enabledParams.forEach(param => url.searchParams.append(param.key, param.value));
+    if (request.auth.type === AuthType.API_KEY && request.auth.apiKey?.in === 'query') {
+      url.searchParams.set(request.auth.apiKey.key, request.auth.apiKey.value);
+    }
+    curl += ` "${url.toString().replace(/"/g, '\\"')}"`;
 
     // Add headers
     request.headers
@@ -30,6 +37,14 @@ class ImportExportService {
       .forEach(h => {
         curl += ` \\\n  -H "${h.key}: ${h.value.replace(/"/g, '\\"')}"`;
       });
+
+    if (request.auth.type === AuthType.BEARER && request.auth.bearer?.token) {
+      curl += ` -H "Authorization: Bearer ${request.auth.bearer.token.replace(/"/g, '\\"')}"`;
+    } else if (request.auth.type === AuthType.BASIC && request.auth.basic) {
+      curl += ` -u "${request.auth.basic.username.replace(/"/g, '\\"')}:${request.auth.basic.password.replace(/"/g, '\\"')}"`;
+    } else if (request.auth.type === AuthType.API_KEY && request.auth.apiKey?.in === 'header') {
+      curl += ` -H "${request.auth.apiKey.key}: ${request.auth.apiKey.value.replace(/"/g, '\\"')}"`;
+    }
 
     // Add body
     if (request.body.type === BodyType.RAW && request.body.raw) {

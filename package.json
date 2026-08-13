@@ -58,12 +58,18 @@
     }
   },
   "dependencies": {
+    "@ffmpeg/core": "^0.12.10",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
     "@monaco-editor/react": "^4.7.0",
     "crypto-js": "^4.2.0",
     "decimal.js": "^10.5.0",
     "fast-xml-parser": "^5.0.8",
+    "gifenc": "^1.0.3",
+    "jszip": "^3.10.1",
     "mathjs": "^14.3.1",
     "monaco-editor": "^0.55.1",
+    "pdf-lib": "^1.17.1",
     "prettier": "^3.5.3",
     "prismjs": "^1.29.0",
     "qrcode": "^1.5.4",
@@ -72,6 +78,7 @@
     "react-dom": "^18.2.0",
     "react-simple-code-editor": "^0.14.1",
     "react-syntax-highlighter": "^15.6.1",
+    "reamkit": "^1.28.0",
     "vkbeautify": "^0.99.3",
     "xml-formatter": "^3.6.4",
     "xml2js": "^0.6.2"

@@ -6,13 +6,15 @@ const { URL } = require('url');
 const fs = require('fs');
 
 let mainWindow;
+const activeHttpRequests = new Map();
 
 // Get preload path - handle both dev and packaged scenarios
 function getPreloadPath() {
   // In packaged app, preload.cjs is at the same level as electron.cjs
   const preloadPath = path.join(__dirname, 'preload.cjs');
-  console.log('[Electron] Preload path:', preloadPath);
-  console.log('[Electron] Preload exists:', fs.existsSync(preloadPath));
+  if (!fs.existsSync(preloadPath)) {
+    throw new Error(`Electron preload script not found: ${preloadPath}`);
+  }
   return preloadPath;
 }
 
@@ -49,23 +51,16 @@ app.whenReady().then(() => {
   // Register IPC handler AFTER app is ready
   // This bypasses CORS completely since we use native Node.js http module
   ipcMain.handle('http-request', async (event, requestData) => {
-    console.log('[IPC] http-request received:', {
-      url: requestData.url,
-      method: requestData.method,
-      hasBody: !!requestData.body,
-    });
-
     return new Promise((resolve) => {
       try {
-        const { url, method, headers, body } = requestData;
+        const { requestId, url, method, headers, body, timeout } = requestData;
         
         // Parse URL
         let parsedUrl;
         try {
           parsedUrl = new URL(url);
         } catch (err) {
-          console.error('[IPC] Invalid URL:', url, err.message);
-          resolve({
+            resolve({
             error: {
               message: `Invalid URL: ${err.message}`,
               code: 'INVALID_URL',
@@ -74,6 +69,10 @@ app.whenReady().then(() => {
           return;
         }
 
+        if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+          resolve({ error: { message: 'Only HTTP and HTTPS are supported', code: 'INVALID_URL' } });
+          return;
+        }
         const protocol = parsedUrl.protocol === 'https:' ? https : http;
 
         const options = {
@@ -81,28 +80,18 @@ app.whenReady().then(() => {
           headers: headers || {},
         };
 
-        console.log('[IPC] Making request:', {
-          url,
-          method: options.method,
-          headerKeys: Object.keys(options.headers),
-        });
-
         const req = protocol.request(url, options, (res) => {
-          let data = '';
+          const chunks = [];
           res.on('data', (chunk) => {
-            data += chunk;
+            chunks.push(Buffer.from(chunk));
           });
           res.on('end', () => {
+            if (requestId) activeHttpRequests.delete(requestId);
+            const data = Buffer.concat(chunks).toString('utf8');
             // Convert headers to plain object
             const responseHeaders = {};
             Object.entries(res.headers).forEach(([key, value]) => {
               responseHeaders[key] = String(value);
-            });
-
-            console.log('[IPC] Response received:', {
-              status: res.statusCode,
-              contentType: res.headers['content-type'],
-              bodyLength: data.length,
             });
 
             resolve({
@@ -115,7 +104,7 @@ app.whenReady().then(() => {
         });
 
         req.on('error', (error) => {
-          console.error('[IPC] Request error:', error.message, error.code);
+          if (requestId) activeHttpRequests.delete(requestId);
           resolve({
             error: {
               message: error.message,
@@ -124,14 +113,21 @@ app.whenReady().then(() => {
           });
         });
 
+        if (requestId) activeHttpRequests.set(requestId, req);
+        if (Number.isFinite(timeout) && timeout > 0) {
+          req.setTimeout(timeout, () => {
+            const timeoutError = new Error(`Request timed out after ${timeout} ms`);
+            timeoutError.code = 'ETIMEDOUT';
+            req.destroy(timeoutError);
+          });
+        }
+
         // Send body if present
         if (body) {
-          console.log('[IPC] Writing body, length:', body.length);
           req.write(body);
         }
         req.end();
       } catch (error) {
-        console.error('[IPC] Catch error:', error.message);
         resolve({
           error: {
             message: error.message,
@@ -140,6 +136,16 @@ app.whenReady().then(() => {
         });
       }
     });
+  });
+
+  ipcMain.on('http-request-cancel', (event, requestId) => {
+    const request = activeHttpRequests.get(requestId);
+    if (request) {
+      const error = new Error('Request cancelled');
+      error.code = 'ABORTED';
+      request.destroy(error);
+      activeHttpRequests.delete(requestId);
+    }
   });
 
   createWindow();

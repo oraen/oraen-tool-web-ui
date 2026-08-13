@@ -18,7 +18,10 @@ class ImportParserService {
     };
 
     try {
-      let curl = curlCommand.trim();
+      let curl = curlCommand
+        .replace(/\\\r?\n/g, ' ')
+        .replace(/\^\r?\n/g, ' ')
+        .trim();
       if (curl.startsWith('curl')) {
         curl = curl.substring(4).trim();
       }
@@ -43,7 +46,9 @@ class ImportParserService {
         } else if (part === '-H' || part === '--header') {
           i++;
           const headerValue = parts[i] || '';
-          const [key, value] = headerValue.split(':').map(s => s.trim());
+          const separatorIndex = headerValue.indexOf(':');
+          const key = separatorIndex >= 0 ? headerValue.slice(0, separatorIndex).trim() : '';
+          const value = separatorIndex >= 0 ? headerValue.slice(separatorIndex + 1).trim() : '';
           if (key && value !== undefined) {
             request.headers.push({
               id: `header_${Date.now()}_${Math.random()}`,
@@ -52,7 +57,10 @@ class ImportParserService {
               enabled: true,
             });
           }
-        } else if (part === '-d' || part === '--data' || part === '--data-raw') {
+        } else if (part === '--url') {
+          i++;
+          request.url = parts[i] || request.url;
+        } else if (part === '-d' || part === '--data' || part === '--data-raw' || part === '--data-binary') {
           i++;
           const data = parts[i] || '';
           request.body = {
@@ -62,6 +70,35 @@ class ImportParserService {
               content: data,
             },
           };
+          if (request.method === HttpMethod.GET) request.method = HttpMethod.POST;
+        } else if (part === '--data-urlencode') {
+          i++;
+          const data = parts[i] || '';
+          const separatorIndex = data.indexOf('=');
+          const key = separatorIndex >= 0 ? data.slice(0, separatorIndex) : data;
+          const value = separatorIndex >= 0 ? data.slice(separatorIndex + 1) : '';
+          request.body = {
+            type: BodyType.X_FORM_URLENCODED,
+            urlencoded: [
+              ...(request.body.urlencoded || []),
+              { id: `url_${Date.now()}_${Math.random()}`, key, value, enabled: true },
+            ],
+          };
+          if (request.method === HttpMethod.GET) request.method = HttpMethod.POST;
+        } else if (part === '-F' || part === '--form') {
+          i++;
+          const data = parts[i] || '';
+          const separatorIndex = data.indexOf('=');
+          const key = separatorIndex >= 0 ? data.slice(0, separatorIndex) : data;
+          const value = separatorIndex >= 0 ? data.slice(separatorIndex + 1) : '';
+          request.body = {
+            type: BodyType.FORM_DATA,
+            formData: [
+              ...(request.body.formData || []),
+              { id: `form_${Date.now()}_${Math.random()}`, key, value, enabled: true, type: 'text' },
+            ],
+          };
+          if (request.method === HttpMethod.GET) request.method = HttpMethod.POST;
         } else if (part === '-G' || part === '--get') {
           request.method = HttpMethod.GET;
         } else if (part === '-u' || part === '--user') {
@@ -301,7 +338,7 @@ class ImportParserService {
         } else {
           current += char;
         }
-      } else if (char === ' ' && !inQuote) {
+      } else if (/\s/.test(char) && !inQuote) {
         if (current.trim()) {
           parts.push(current.trim());
         }

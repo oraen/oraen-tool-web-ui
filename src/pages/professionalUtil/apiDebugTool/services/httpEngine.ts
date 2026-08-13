@@ -1,4 +1,13 @@
-import { HttpRequest, HttpResponse, ParamItem, HeaderItem, AuthType, HttpMethod } from '../types';
+import {
+  AuthType,
+  BodyType,
+  HeaderItem,
+  HttpMethod,
+  HttpRequest,
+  HttpResponse,
+  ParamItem,
+  RawBodyFormat,
+} from '../types';
 
 export interface RequestOptions {
   timeout?: number;
@@ -7,416 +16,269 @@ export interface RequestOptions {
 
 export interface RequestExecutionResult {
   response?: HttpResponse;
-  error?: {
-    message: string;
-    code?: string;
-  };
+  error?: { message: string; code?: string };
   duration: number;
 }
 
+interface ElectronHttpResponse {
+  status?: number;
+  statusText?: string;
+  headers?: Record<string, string | string[]>;
+  body?: string;
+  error?: { message: string; code?: string };
+}
+
+interface PreparedBody {
+  browserBody: BodyInit | null;
+  ipcBody: string | null;
+  contentType?: string;
+}
+
 class HttpRequestEngine {
-  /**
-   * Detect if running in Electron environment
-   */
   private isElectron(): boolean {
-    // Multiple detection methods for reliability
-    if (typeof window === 'undefined') return false;
-    
-    const win = window as any;
-    
-    // Method 1: Check for exposed electron object from preload
-    if (win.electron?.isElectron === true) {
-      console.log('[HttpEngine] Detected Electron via preload');
-      return true;
-    }
-    
-    // Method 2: Check for __ELECTRON__ flag
-    if (win.__ELECTRON__ === true) {
-      console.log('[HttpEngine] Detected Electron via __ELECTRON__');
-      return true;
-    }
-    
-    // Method 3: Check user agent
-    if (navigator.userAgent.includes('Electron')) {
-      console.log('[HttpEngine] Detected Electron via user agent');
-      return true;
-    }
-    
-    // Method 4: Check for common Electron/Node globals
-    if (typeof (win.require) === 'function' || typeof (win.process) === 'object') {
-      if (win.process?.type === 'renderer') {
-        console.log('[HttpEngine] Detected Electron via process object');
-        return true;
-      }
-    }
-    
-    return false;
+    return typeof window !== 'undefined' && typeof (window as any).electron?.makeRequest === 'function';
   }
 
-  /**
-   * Build URL with parameters
-   */
-  private buildUrl(baseUrl: string, params: ParamItem[]): string {
-    const enabledParams = params.filter(p => p.enabled);
-    if (enabledParams.length === 0) return baseUrl;
-
-    const queryParams = enabledParams.map(p => 
-      `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`
-    ).join('&');
-
-    const separator = baseUrl.includes('?') ? '&' : '?';
-    return `${baseUrl}${separator}${queryParams}`;
+  private buildUrl(baseUrl: string, params: ParamItem[], authQuery?: { key: string; value: string }): string {
+    const url = new URL(baseUrl.trim());
+    // The URL field is the source of truth. Params mirror its query string, so
+    // replace matching keys instead of blindly appending duplicates.
+    const enabledParams = (params || []).filter(param => param.enabled && param.key.trim());
+    const managedKeys = new Set(enabledParams.map(param => param.key));
+    managedKeys.forEach(key => url.searchParams.delete(key));
+    enabledParams.forEach(param => url.searchParams.append(param.key, param.value));
+    if (authQuery?.key) url.searchParams.set(authQuery.key, authQuery.value);
+    return url.toString();
   }
 
-  /**
-   * Build request headers
-   */
-  private buildHeaders(headers: HeaderItem[], body?: any, bodyType?: string, rawFormat?: string): Record<string, string> {
-    const result: Record<string, string> = {};
-
-    // Add enabled headers
-    headers
-      .filter(h => h.enabled)
-      .forEach(h => {
-        result[h.key] = h.value;
-      });
-
-    // Set default Content-Type if not provided
-    // Skip auto-setting if body is FormData (browser will handle it automatically)
-    if (!result['Content-Type']) {
-      // For form-data, let the browser automatically set Content-Type with boundary
-      if (body instanceof FormData) {
-        // Browser/Electron will automatically set Content-Type: multipart/form-data
-        // Do not set it manually
-      } else if (bodyType === 'x-www-form-urlencoded') {
-        result['Content-Type'] = 'application/x-www-form-urlencoded';
-      } else if (bodyType === 'raw') {
-        // For raw body, only set Content-Type based on selected format
-        // This matches Postman behavior
-        if (rawFormat === 'json') {
-          result['Content-Type'] = 'application/json';
-        } else if (rawFormat === 'xml') {
-          result['Content-Type'] = 'application/xml';
-        }
-        // For 'text' (HTML) format, don't set Content-Type
-        // Let server handle content negotiation
-      }
-    }
-
-    return result;
+  private findHeader(headers: Record<string, string>, key: string): string | undefined {
+    const match = Object.keys(headers).find(header => header.toLowerCase() === key.toLowerCase());
+    return match ? headers[match] : undefined;
   }
 
-  /**
-   * Build request body - GET/HEAD methods should not have a body
-   */
-  private buildBody(request: HttpRequest): string | FormData | null {
-    const { body, method } = request;
+  private setHeader(headers: Record<string, string>, key: string, value: string): void {
+    const existing = Object.keys(headers).find(header => header.toLowerCase() === key.toLowerCase());
+    if (existing) headers[existing] = value;
+    else headers[key] = value;
+  }
 
-    // GET and HEAD methods should not have a request body per HTTP spec
-    // Ignore any body content for these methods
-    if (method === HttpMethod.GET) {
-      return null;
+  private buildHeaders(request: HttpRequest, preparedBody: PreparedBody, forElectron: boolean): Record<string, string> {
+    const headers: Record<string, string> = {};
+    (request.headers || [])
+      .filter(header => header.enabled && header.key.trim())
+      .forEach(header => this.setHeader(headers, header.key.trim(), header.value));
+
+    if (request.auth?.type === AuthType.BEARER && request.auth.bearer?.token) {
+      this.setHeader(headers, 'Authorization', `Bearer ${request.auth.bearer.token}`);
+    } else if (request.auth?.type === AuthType.BASIC && request.auth.basic) {
+      const credentials = `${request.auth.basic.username || ''}:${request.auth.basic.password || ''}`;
+      this.setHeader(headers, 'Authorization', `Basic ${btoa(unescape(encodeURIComponent(credentials)))}`);
+    } else if (request.auth?.type === AuthType.API_KEY && request.auth.apiKey?.in === 'header') {
+      this.setHeader(headers, request.auth.apiKey.key, request.auth.apiKey.value);
     }
 
-    if (body.type === 'none' || !body.type) {
-      return null;
+    const browserManagesMultipartBoundary = request.body?.type === BodyType.FORM_DATA && !forElectron;
+    if (browserManagesMultipartBoundary) {
+      const contentTypeHeader = Object.keys(headers).find(header => header.toLowerCase() === 'content-type');
+      if (contentTypeHeader) delete headers[contentTypeHeader];
+    }
+    if (preparedBody.contentType && !browserManagesMultipartBoundary && !this.findHeader(headers, 'content-type')) {
+      this.setHeader(headers, 'Content-Type', preparedBody.contentType);
+    }
+    return headers;
+  }
+
+  private prepareBody(request: HttpRequest): PreparedBody {
+    if (request.method === HttpMethod.GET || request.method === HttpMethod.HEAD || !request.body || request.body.type === BodyType.NONE) {
+      return { browserBody: null, ipcBody: null };
     }
 
-    if (body.type === 'form-data') {
+    if (request.body.type === BodyType.FORM_DATA) {
+      const enabledItems = (request.body.formData || []).filter(item => item.enabled && item.key.trim());
       const formData = new FormData();
-      body.formData?.forEach(item => {
-        if (item.enabled) {
-          formData.append(item.key, item.value);
-        }
-      });
-      return formData;
+      enabledItems.forEach(item => formData.append(item.key, item.value));
+
+      // IPC cannot structured-clone FormData. Encode the same data explicitly.
+      const boundary = `----ORAENFormBoundary${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
+      const ipcBody = enabledItems.map(item =>
+        `--${boundary}\r\nContent-Disposition: form-data; name="${item.key.replace(/"/g, '%22')}"\r\n\r\n${item.value}\r\n`
+      ).join('') + `--${boundary}--\r\n`;
+      return { browserBody: formData, ipcBody, contentType: `multipart/form-data; boundary=${boundary}` };
     }
 
-    if (body.type === 'x-www-form-urlencoded') {
+    if (request.body.type === BodyType.X_FORM_URLENCODED) {
       const params = new URLSearchParams();
-      body.urlencoded?.forEach(item => {
-        if (item.enabled) {
-          params.append(item.key, item.value);
-        }
-      });
-      return params.toString();
+      (request.body.urlencoded || [])
+        .filter(item => item.enabled && item.key.trim())
+        .forEach(item => params.append(item.key, item.value));
+      const body = params.toString();
+      return { browserBody: body, ipcBody: body, contentType: 'application/x-www-form-urlencoded;charset=UTF-8' };
     }
 
-    if (body.type === 'raw' && body.raw) {
-      return body.raw.content;
+    if (request.body.type === BodyType.RAW) {
+      const body = request.body.raw?.content || '';
+      const format = request.body.raw?.format;
+      const contentType = format === RawBodyFormat.JSON
+        ? 'application/json'
+        : format === RawBodyFormat.XML
+          ? 'application/xml'
+          : 'text/plain;charset=UTF-8';
+      return { browserBody: body, ipcBody: body, contentType };
     }
 
-    return null;
+    return { browserBody: null, ipcBody: null };
   }
 
-  /**
-   * Detect response body type
-   */
-  private detectBodyType(
-    contentType: string,
-    body: string
-  ): 'json' | 'html' | 'text' | 'xml' {
-    if (contentType.includes('application/json')) return 'json';
-    if (contentType.includes('text/html')) return 'html';
-    if (contentType.includes('text/xml') || contentType.includes('application/xml')) return 'xml';
+  private detectBodyType(contentType: string, body: string): HttpResponse['bodyType'] {
+    const normalized = contentType.toLowerCase();
+    if (normalized.includes('json')) return 'json';
+    if (/^\s*[\[{]/.test(body)) {
+      try {
+        JSON.parse(body);
+        return 'json';
+      } catch {}
+    }
+    if (normalized.includes('html')) return 'html';
+    if (normalized.includes('xml') || /^\s*<\?xml/.test(body)) return 'xml';
     return 'text';
   }
 
-  /**
-   * Extract response size in bytes
-   */
-  private calculateResponseSize(body: string): number {
-    return new Blob([body]).size;
+  private normalizeHeaders(headers: any): Record<string, string> {
+    const result: Record<string, string> = {};
+    if (headers?.forEach) {
+      headers.forEach((value: any, key: string) => { result[key.toLowerCase()] = String(value); });
+    } else {
+      Object.entries(headers || {}).forEach(([key, value]) => {
+        result[key.toLowerCase()] = Array.isArray(value) ? value.join('\n') : String(value ?? '');
+      });
+    }
+    return result;
   }
 
-  /**
-   * Execute HTTP request
-   */
-  async execute(
-    request: HttpRequest,
-    options: RequestOptions = {}
-  ): Promise<RequestExecutionResult> {
+  async execute(request: HttpRequest, options: RequestOptions = {}): Promise<RequestExecutionResult> {
     const startTime = performance.now();
-    const timeout = options.timeout || 30000;
+    const timeout = Number.isFinite(options.timeout) ? Math.max(0, options.timeout as number) : 30000;
     const controller = new AbortController();
-    let timeoutId: NodeJS.Timeout | undefined;
-
-    // Validate URL format
-    try {
-      const urlObj = new URL(request.url);
-      // Additional validation: URL should have a valid protocol
-      if (!urlObj.protocol.match(/^https?:$/)) {
-        return {
-          error: {
-            message: `Invalid URL protocol. Only http:// and https:// are supported. Got: ${urlObj.protocol}`,
-            code: 'INVALID_URL',
-          },
-          duration: performance.now() - startTime,
-        };
-      }
-    } catch (err: any) {
-      return {
-        error: {
-          message: `Invalid URL format: ${err.message}. Please enter a valid URL starting with http:// or https://`,
-          code: 'INVALID_URL',
-        },
-        duration: performance.now() - startTime,
-      };
-    }
+    let didTimeout = false;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const abortFromCaller = () => controller.abort();
 
     try {
-      // Create timeout
+      if (options.signal?.aborted) controller.abort();
+      else options.signal?.addEventListener('abort', abortFromCaller, { once: true });
       if (timeout > 0) {
         timeoutId = setTimeout(() => {
+          didTimeout = true;
           controller.abort();
         }, timeout);
       }
 
-      // Build URL with parameters
-      const url = this.buildUrl(request.url, request.params);
-
-      // Build body first to determine content type
-      const body = this.buildBody(request);
-
-      // Build headers (pass body for content-type detection)
-      const rawFormat = request.body.type === 'raw' ? request.body.raw?.format : undefined;
-      const headers = this.buildHeaders(request.headers, body, request.body.type, rawFormat);
-
-      // Make request
-      const isElectronEnv = this.isElectron();
-      
-      // Debug logging
-      console.log('[HttpEngine] Request Debug:', {
-        url,
-        method: request.method,
-        bodyType: request.body.type,
-        rawFormat: request.body.type === 'raw' ? request.body.raw?.format : undefined,
-        isElectron: isElectronEnv,
-        headers: Object.keys(headers),
-      });
-      
-      let fetchResponse;
-      
-      // In Electron, use IPC to make request in main process (no CORS issues)
-      // In browser, use fetch API
-      if (isElectronEnv && (window as any).electron?.makeRequest) {
-        // Use native Node.js http/https in main process - completely bypasses CORS
-        console.log('[HttpEngine] Using IPC for request');
-        
-        const ipcResponse = await (window as any).electron.makeRequest({
-          url,
-          method: request.method,
-          headers,
-          body: typeof body === 'string' ? body : null,
-        });
-
-        console.log('[HttpEngine] IPC Response:', {
-          hasError: !!ipcResponse.error,
-          status: ipcResponse.status,
-          bodyLength: ipcResponse.body?.length,
-        });
-
-        if (ipcResponse.error) {
-          console.error('[HttpEngine] IPC Error:', ipcResponse.error);
-          throw new Error(`IPC Error: ${ipcResponse.error.message} (${ipcResponse.error.code})`);
-        }
-
-        // Convert IPC response to fetch-like response
-        fetchResponse = {
-          ok: ipcResponse.status >= 200 && ipcResponse.status < 300,
-          status: ipcResponse.status,
-          statusText: ipcResponse.statusText,
-          headers: new Map(Object.entries(ipcResponse.headers || {})),
-          text: async () => ipcResponse.body,
-        };
-      } else {
-        // Browser: use fetch with CORS
-        console.log('[HttpEngine] Using Fetch API for request');
-        
-        const fetchOptions: any = {
-          method: request.method,
-          headers: headers as any,
-          body: body as any,
-          signal: options.signal || controller.signal,
-          mode: 'cors',
-          credentials: 'include',
-        };
-        
-        fetchResponse = await fetch(url, fetchOptions);
+      const authQuery = request.auth?.type === AuthType.API_KEY && request.auth.apiKey?.in === 'query'
+        ? { key: request.auth.apiKey.key, value: request.auth.apiKey.value }
+        : undefined;
+      const url = this.buildUrl(request.url, request.params || [], authQuery);
+      if (!/^https?:$/i.test(new URL(url).protocol)) {
+        return { error: { message: '仅支持 http:// 和 https:// 地址', code: 'INVALID_URL' }, duration: performance.now() - startTime };
       }
 
-      // Read response body
-      const responseBody = await (fetchResponse.text instanceof Function ? fetchResponse.text() : fetchResponse.text);
-      const contentType = fetchResponse.headers.get?.('Content-Type') ||
-                         fetchResponse.headers.get?.('content-type') ||
-                         'text/plain';
-      const responseTime = performance.now() - startTime;
-      const responseSize = this.calculateResponseSize(responseBody);
+      const preparedBody = this.prepareBody(request);
+      const electronMode = this.isElectron();
+      const headers = this.buildHeaders(request, preparedBody, electronMode);
+      let status = 0;
+      let statusText = '';
+      let responseBody = '';
+      let responseHeaders: Record<string, string> = {};
 
-      // Parse response headers
-      const responseHeaders: Record<string, string> = {};
-      fetchResponse.headers.forEach((value: any, key: string) => {
-        responseHeaders[key] = String(value);
-      });
+      if (electronMode) {
+        const electron = (window as any).electron;
+        const requestId = `http_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const cancelElectron = () => electron.cancelRequest?.(requestId);
+        controller.signal.addEventListener('abort', cancelElectron, { once: true });
+        try {
+          const result: ElectronHttpResponse = await electron.makeRequest({
+            requestId,
+            url,
+            method: request.method,
+            headers,
+            body: preparedBody.ipcBody,
+            timeout,
+          });
+          if (result.error) {
+            const error = new Error(result.error.message) as Error & { code?: string };
+            error.code = result.error.code;
+            throw error;
+          }
+          status = result.status || 0;
+          statusText = result.statusText || '';
+          responseBody = result.body || '';
+          responseHeaders = this.normalizeHeaders(result.headers);
+        } finally {
+          controller.signal.removeEventListener('abort', cancelElectron);
+        }
+      } else {
+        const response = await fetch(url, {
+          method: request.method,
+          headers,
+          body: preparedBody.browserBody,
+          signal: controller.signal,
+          mode: 'cors',
+          credentials: 'include',
+          redirect: 'follow',
+        });
+        status = response.status;
+        statusText = response.statusText;
+        responseBody = request.method === HttpMethod.HEAD ? '' : await response.text();
+        responseHeaders = this.normalizeHeaders(response.headers);
+      }
 
-      const contentTypeForDetection = typeof contentType === 'string' ? contentType : 'text/plain';
-      const response: HttpResponse = {
-        status: fetchResponse.status,
-        statusText: fetchResponse.statusText,
-        headers: responseHeaders,
-        body: responseBody,
-        bodyType: this.detectBodyType(contentTypeForDetection, responseBody),
-        responseTime,
-        responseSize,
-        receivedAt: Date.now(),
-      };
-
+      const duration = performance.now() - startTime;
       return {
-        response,
-        duration: responseTime,
+        response: {
+          status,
+          statusText,
+          headers: responseHeaders,
+          body: responseBody,
+          bodyType: this.detectBodyType(responseHeaders['content-type'] || '', responseBody),
+          responseTime: duration,
+          responseSize: new Blob([responseBody]).size,
+          receivedAt: Date.now(),
+        },
+        duration,
       };
     } catch (error: any) {
       const duration = performance.now() - startTime;
-
-      if (error.name === 'AbortError') {
+      if (didTimeout || error?.code === 'ETIMEDOUT') {
+        return { error: { message: `请求超时（${timeout} ms）`, code: 'TIMEOUT_ERROR' }, duration };
+      }
+      if (controller.signal.aborted || error?.name === 'AbortError' || error?.code === 'ABORTED') {
+        return { error: { message: '请求已取消', code: 'CANCELLED' }, duration };
+      }
+      if (error instanceof TypeError && typeof navigator !== 'undefined' && !navigator.onLine) {
+        return { error: { message: '网络已断开，请检查网络连接', code: 'OFFLINE_ERROR' }, duration };
+      }
+      if (error instanceof TypeError && !this.isElectron()) {
         return {
           error: {
-            message: 'Request timeout or cancelled',
-            code: 'ABORT_ERROR',
+            message: `浏览器未能完成请求：${error.message || '网络错误'}。请检查服务地址、网络和 CORS 配置。`,
+            code: 'CORS_ERROR',
           },
           duration,
         };
       }
-
-      if (error instanceof TypeError) {
-        // Detect error type
-        const errorMsg = error.message || '';
-        
-        // Check if it's a GET/HEAD with body error (HTTP spec violation)
-        if (errorMsg.includes('GET/HEAD method cannot have body') || 
-            errorMsg.includes('Request with GET/HEAD method cannot have body')) {
-          console.error('[HttpEngine] Invalid HTTP request - GET/HEAD cannot have body');
-          return {
-            error: {
-              message: `Invalid HTTP request: ${errorMsg}. GET/HEAD methods cannot have a request body. Please change the method to POST or another appropriate method.`,
-              code: 'INVALID_REQUEST',
-            },
-            duration,
-          };
-        }
-        
-        // Distinguish between CORS errors and other network errors
-        // In browser environment, "Failed to fetch" can be CORS or DNS/network errors
-        // We cannot reliably distinguish them, so we show CORS guidance as a fallback
-        // since CORS is a common issue for API debugging in browsers
-        const isOffline = !navigator.onLine;
-        
-        console.error('[HttpEngine] Error Details:', {
-          errorMsg,
-          isOffline,
-          stack: error.stack,
-          isElectron: this.isElectron(),
-          userAgent: navigator.userAgent,
-        });
-        
-        // Handle offline case
-        if (isOffline) {
-          return {
-            error: {
-              message: 'Network is offline. Please check your internet connection.',
-              code: 'OFFLINE_ERROR',
-            },
-            duration,
-          };
-        }
-        
-        // For "Failed to fetch" errors in browser, show CORS guidance
-        // This is a common issue for API debugging
-        if (errorMsg.includes('Failed to fetch')) {
-          return {
-            error: {
-              message: `Request failed. This could be due to:
-1. CORS policy blocking the request
-2. Server is unreachable
-3. Invalid domain/hostname
-4. Network connectivity issues`,
-              code: 'CORS_ERROR',
-            },
-            duration,
-          };
-        }
-        
-        // Handle other network errors (DNS, connection refused, timeout, etc.)
-        return {
-          error: {
-            message: `Network error: ${errorMsg}. This could be due to:
-1. Invalid domain/hostname
-2. Server connection refused
-3. Network unreachable
-4. Request timeout`,
-            code: 'NETWORK_ERROR',
-          },
-          duration,
-        };
-      }
-
+      const invalidUrl = error instanceof TypeError && /url/i.test(error.message || '');
       return {
         error: {
-          message: error.message || 'Unknown error occurred',
-          code: error.code || 'UNKNOWN_ERROR',
+          message: invalidUrl ? 'URL 格式无效，请输入完整的 http:// 或 https:// 地址' : (error?.message || '请求失败'),
+          code: invalidUrl ? 'INVALID_URL' : (error?.code || 'NETWORK_ERROR'),
         },
         duration,
       };
     } finally {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
+      if (timeoutId) clearTimeout(timeoutId);
+      options.signal?.removeEventListener('abort', abortFromCaller);
     }
   }
 
-  /**
-   * Cancel request (returns AbortController for manual cancellation)
-   */
   createAbortController(): AbortController {
     return new AbortController();
   }

@@ -1,24 +1,19 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Layout,
   Button,
   Input,
   Tabs,
-  Row,
-  Col,
-  Card,
   List,
   Empty,
   Space,
   Dropdown,
   message,
   Modal,
-  Form,
   Select,
   Spin,
   Tooltip,
   Badge,
-  Menu,
   Divider,
   Collapse,
   Radio,
@@ -65,7 +60,6 @@ import {
 
 const { Header, Sider, Content } = Layout;
 const { TabPane } = Tabs;
-const { TextArea } = Input;
 
 interface OpenTab {
   requestId: string;
@@ -135,74 +129,16 @@ const ApiDebugTool: React.FC = () => {
     editRequestModalSourceCollectionId: null,
   });
 
-  const [searchText, setSearchText] = useState('');
   const [activeTab, setActiveTab] = useState('params');
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [lastClickTime, setLastClickTime] = useState<{ [key: string]: number }>({});
-  const [tabClickTimer, setTabClickTimer] = useState<{ [key: string]: NodeJS.Timeout }>({});
+  const clickTimerRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   
   // Monaco Editor refs
   const bodyEditorRef = useRef<any>(null);
   const responseEditorRef = useRef<any>(null);
   const preScriptEditorRef = useRef<any>(null);
   const postScriptEditorRef = useRef<any>(null);
-
-  // Helper: Generate cURL command from request
-  const generateCurlCommand = (request: HttpRequest): string => {
-    let curl = 'curl -X ' + request.method;
-
-    // Add URL with query parameters
-    let url = request.url;
-    const enabledParams = request.params.filter(p => p.enabled);
-    if (enabledParams.length > 0) {
-      const queryString = enabledParams
-        .map(p => `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`)
-        .join('&');
-      url += (url.includes('?') ? '&' : '?') + queryString;
-    }
-    curl += ` "${url}"`;
-
-    // Add headers
-    const enabledHeaders = request.headers.filter(h => h.enabled);
-    for (const header of enabledHeaders) {
-      curl += ` -H "${header.key}: ${header.value}"`;
-    }
-
-    // Add body if present
-    if (request.body.type === BodyType.RAW && request.body.raw?.content) {
-      curl += ` -d '${request.body.raw.content.replace(/'/g, "'\"'\"'")}'`;
-    } else if (request.body.type === BodyType.FORM_DATA && request.body.formData) {
-      const enabledFormData = request.body.formData.filter(f => f.enabled);
-      for (const formItem of enabledFormData) {
-        curl += ` -F "${formItem.key}=${formItem.value}"`;
-      }
-    } else if (request.body.type === BodyType.X_FORM_URLENCODED && request.body.urlencoded) {
-      const enabledUrlencoded = request.body.urlencoded.filter(u => u.enabled);
-      const data = enabledUrlencoded
-        .map(u => `${encodeURIComponent(u.key)}=${encodeURIComponent(u.value)}`)
-        .join('&');
-      if (data) {
-        curl += ` -d "${data}"`;
-      }
-    }
-
-    // Add auth if needed
-    if (request.auth.type === AuthType.BEARER && request.auth.bearer?.token) {
-      curl += ` -H "Authorization: Bearer ${request.auth.bearer.token}"`;
-    } else if (request.auth.type === AuthType.BASIC && request.auth.basic?.username) {
-      const credentials = btoa(`${request.auth.basic.username}:${request.auth.basic.password || ''}`);
-      curl += ` -H "Authorization: Basic ${credentials}"`;
-    } else if (request.auth.type === AuthType.API_KEY && request.auth.apiKey?.key) {
-      if (request.auth.apiKey.in === 'header') {
-        curl += ` -H "${request.auth.apiKey.key}: ${request.auth.apiKey.value}"`;
-      } else if (request.auth.apiKey.in === 'query') {
-        curl += `&${encodeURIComponent(request.auth.apiKey.key)}=${encodeURIComponent(request.auth.apiKey.value)}`;
-      }
-    }
-
-    return curl;
-  };
 
   // Helper: Format response body based on content type
   const formatResponseBody = (body: string, contentType: string = ''): string => {
@@ -323,6 +259,9 @@ const ApiDebugTool: React.FC = () => {
   // Initialize app
   useEffect(() => {
     initializeApp();
+    return () => {
+      Object.values(clickTimerRef.current).forEach(clearTimeout);
+    };
   }, []);
 
   // Load requests for all collections
@@ -341,6 +280,7 @@ const ApiDebugTool: React.FC = () => {
         ...prev,
         collectionRequests: newMap,
       }));
+
     };
     if (appState.collections.length > 0) {
       loadCollectionRequests();
@@ -392,6 +332,10 @@ const ApiDebugTool: React.FC = () => {
         settings: settings || defaultSettings,
         loading: false,
       }));
+
+      if (!settings) {
+        await indexedDBService.saveSettings(defaultSettings);
+      }
 
       // Auto-clean expired history
       if (settings) {
@@ -451,26 +395,15 @@ const ApiDebugTool: React.FC = () => {
 
   // Handle request click (single vs double click)
   const handleRequestClick = (request: HttpRequest, requestId: string) => {
-    const now = Date.now();
-    const lastTime = lastClickTime[requestId] || 0;
-    const timeDiff = now - lastTime;
-
-    // Clear existing timer for this request
-    if (tabClickTimer[requestId]) {
-      clearTimeout(tabClickTimer[requestId]);
-    }
-
-    if (timeDiff < 300) {
-      // Double-click detected
-      setLastClickTime(prev => ({ ...prev, [requestId]: 0 }));
+    if (clickTimerRef.current[requestId]) {
+      clearTimeout(clickTimerRef.current[requestId]);
+      delete clickTimerRef.current[requestId];
       openRequestInTab(request, true); // Persistent
     } else {
-      // Single-click - set up timer for potential double-click
-      setLastClickTime(prev => ({ ...prev, [requestId]: now }));
-      const timer = setTimeout(() => {
+      clickTimerRef.current[requestId] = setTimeout(() => {
+        delete clickTimerRef.current[requestId];
         openRequestInTab(request, false); // Temporary
       }, 300);
-      setTabClickTimer(prev => ({ ...prev, [requestId]: timer }));
     }
   };
 
@@ -497,7 +430,7 @@ const ApiDebugTool: React.FC = () => {
         openTabs: newTabs,
         activeTabId: newActiveTabId,
         currentRequest: newCurrentRequest,
-        response: newCurrentRequest ? prev.response : null,
+        response: null,
       };
     });
   };
@@ -511,19 +444,6 @@ const ApiDebugTool: React.FC = () => {
       currentRequest: null,
       response: null,
     }));
-  };
-
-  // Close other tabs
-  const closeOtherTabs = (requestId: string) => {
-    setAppState(prev => {
-      const newTabs = prev.openTabs.filter(t => t.requestId === requestId);
-      return {
-        ...prev,
-        openTabs: newTabs,
-        activeTabId: requestId,
-        currentRequest: prev.currentRequest?.id === requestId ? prev.currentRequest : newTabs[0]?.request || null,
-      };
-    });
   };
 
   // Create new request
@@ -545,6 +465,12 @@ const ApiDebugTool: React.FC = () => {
     setAppState(prev => ({
       ...prev,
       currentRequest: newRequest,
+      openTabs: [...prev.openTabs.filter(tab => !tab.isTemporary), {
+        requestId: newRequest.id,
+        request: newRequest,
+        isPersistent: true,
+      }],
+      activeTabId: newRequest.id,
       response: null,
     }));
   };
@@ -561,84 +487,119 @@ const ApiDebugTool: React.FC = () => {
       return;
     }
 
-    setAppState(prev => ({ ...prev, sending: true }));
+    if (appState.sending) {
+      cancelRequest();
+      return;
+    }
+
+    const controller = httpEngine.createAbortController();
+    setAppState(prev => ({
+      ...prev,
+      sending: true,
+      requestAbortController: controller,
+      response: null,
+    }));
 
     try {
+      const collection = appState.collections.find(item => item.id === appState.currentRequest?.collectionId);
+      const variables = variableSystem.mergeVariables({
+        global: appState.settings?.variables || [],
+        collection: collection?.variables || [],
+        request: [],
+      });
+      let requestToSend = variableSystem.replaceVariablesInObject(appState.currentRequest, variables);
+      let persistedVariables = [...(appState.settings?.variables || [])];
+      const persistScriptVariables = async (changes?: Record<string, string>) => {
+        if (!changes || Object.keys(changes).length === 0 || !appState.settings) return;
+        const nextVariables = [...persistedVariables];
+        Object.entries(changes).forEach(([key, value]) => {
+          const existing = nextVariables.find(variable => variable.key === key);
+          if (existing) existing.value = value;
+          else nextVariables.push({
+            id: `variable_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            key,
+            value,
+            enabled: true,
+          });
+        });
+        persistedVariables = nextVariables;
+        const settings = { ...appState.settings, variables: nextVariables, updatedAt: Date.now() };
+        await indexedDBService.saveSettings(settings);
+        setAppState(prev => ({ ...prev, settings }));
+      };
+
       // Execute pre-request script
-      if (appState.currentRequest.scripts?.preRequest) {
+      if (requestToSend.scripts?.preRequest) {
         const scriptResult = await scriptEngine.executePreRequestScript(
-          appState.currentRequest.scripts.preRequest,
+          requestToSend.scripts.preRequest,
           {
-            request: appState.currentRequest,
-            variables: variableSystem.mergeVariables({
-              global: appState.settings?.variables || [],
-              collection: [],
-              request: [],
-            }),
+            request: requestToSend,
+            variables,
             globals: appState.settings?.variables || [],
           }
         );
 
         if (!scriptResult.success) {
           message.error(`Pre-request script error: ${scriptResult.error}`);
-          setAppState(prev => ({ ...prev, sending: false }));
           return;
         }
+        if (scriptResult.modifiedRequest) {
+          requestToSend = { ...requestToSend, ...scriptResult.modifiedRequest };
+        }
+        await persistScriptVariables(scriptResult.modifiedVariables);
       }
 
       // Send request
-      const controller = appState.requestAbortController || httpEngine.createAbortController();
-      const result = await httpEngine.execute(appState.currentRequest, {
-        timeout: appState.settings?.defaultTimeout || 30000,
+      const result = await httpEngine.execute(requestToSend, {
+        timeout: appState.settings?.defaultTimeout ?? 30000,
         signal: controller.signal,
       });
 
       if (result.response) {
         // Execute post-response script
-        if (appState.currentRequest.scripts?.postResponse) {
-          await scriptEngine.executePostResponseScript(
-            appState.currentRequest.scripts.postResponse,
+        if (requestToSend.scripts?.postResponse) {
+          const postResult = await scriptEngine.executePostResponseScript(
+            requestToSend.scripts.postResponse,
             {
-              request: appState.currentRequest,
+              request: requestToSend,
               response: result.response,
-              variables: variableSystem.mergeVariables({
-                global: appState.settings?.variables || [],
-                collection: [],
-                request: [],
-              }),
+              variables,
               globals: appState.settings?.variables || [],
             }
           );
+          if (!postResult.success) {
+            message.warning(`响应脚本执行失败: ${postResult.error}`);
+          } else {
+            await persistScriptVariables(postResult.modifiedVariables);
+          }
         }
 
         // Add to history with curl and response data
         const historyEntry: HistoryEntry = {
           id: `hist_${Date.now()}`,
-          method: appState.currentRequest.method,
-          url: appState.currentRequest.url,
-          name: appState.currentRequest.name,
+          collectionId: requestToSend.collectionId,
+          requestId: requestToSend.id,
+          method: requestToSend.method,
+          url: requestToSend.url,
+          name: requestToSend.name,
           status: result.response.status,
           responseTime: result.response.responseTime,
           responseSize: result.response.responseSize,
           executedAt: Date.now(),
-          curl: generateCurlCommand(appState.currentRequest),
+          curl: importExportService.exportRequestAsCurl(requestToSend),
           responseBody: result.response.body,
           responseHeaders: result.response.headers,
         };
 
         await indexedDBService.addHistoryEntry(historyEntry);
 
-        // Limit history to 50 entries
-        const newHistory = [historyEntry, ...appState.history.slice(0, 49)];
-        
-        // If history exceeds 50, delete the oldest entry from IndexedDB
-        if (appState.history.length >= 50 && appState.history[49]) {
-          try {
-            await indexedDBService.deleteHistoryEntry(appState.history[49].id);
-          } catch (err) {
-            console.warn('Failed to delete old history entry:', err);
-          }
-        }
+        const historyLimit = Math.max(1, appState.settings?.maxHistorySize || 1000);
+        const visibleHistoryLimit = Math.min(historyLimit, 200);
+        const newHistory = [historyEntry, ...appState.history].slice(0, visibleHistoryLimit);
+        await indexedDBService.clearOldHistory(
+          Math.max(1, appState.settings?.historyExpireDays || 30),
+          historyLimit
+        );
 
         setAppState(prev => ({
           ...prev,
@@ -655,7 +616,11 @@ const ApiDebugTool: React.FC = () => {
         }));
         
         // Handle different error types with specific messages
-        if (result.error.code === 'INVALID_URL') {
+        if (result.error.code === 'CANCELLED') {
+          message.info(result.error.message);
+        } else if (result.error.code === 'TIMEOUT_ERROR') {
+          message.error(result.error.message);
+        } else if (result.error.code === 'INVALID_URL') {
           // Invalid URL format
           message.error(result.error.message);
         } else if (result.error.code === 'INVALID_REQUEST') {
@@ -704,7 +669,9 @@ const ApiDebugTool: React.FC = () => {
       }));
       message.error(`Request error: ${error.message}`);
     } finally {
-      setAppState(prev => ({ ...prev, sending: false }));
+      setAppState(prev => prev.requestAbortController === controller
+        ? { ...prev, sending: false, requestAbortController: null }
+        : prev);
     }
   };
 
@@ -721,6 +688,7 @@ const ApiDebugTool: React.FC = () => {
     setAppState(prev => ({
       ...prev,
       currentRequest: updated,
+      openTabs: prev.openTabs.map(tab => tab.requestId === updated.id ? { ...tab, request: updated } : tab),
     }));
   };
 
@@ -774,7 +742,14 @@ const ApiDebugTool: React.FC = () => {
       // Update collectionRequests map to reflect real-time changes
       setAppState(prev => {
         const newCollectionRequests = new Map(prev.collectionRequests);
-        const requests = newCollectionRequests.get(appState.saveToCollectionId!) || [];
+        if (appState.currentRequest?.collectionId && appState.currentRequest.collectionId !== appState.saveToCollectionId) {
+          const oldRequests = newCollectionRequests.get(appState.currentRequest.collectionId) || [];
+          newCollectionRequests.set(
+            appState.currentRequest.collectionId,
+            oldRequests.filter(request => request.id !== requestToSave.id)
+          );
+        }
+        const requests = [...(newCollectionRequests.get(appState.saveToCollectionId!) || [])];
         
         // Check if request already exists in the collection
         const existingIndex = requests.findIndex(r => r.id === requestToSave.id);
@@ -791,6 +766,10 @@ const ApiDebugTool: React.FC = () => {
         return {
           ...prev,
           currentRequest: requestToSave,
+          currentCollectionId: appState.saveToCollectionId,
+          openTabs: prev.openTabs.map(tab => tab.requestId === requestToSave.id
+            ? { ...tab, request: requestToSave }
+            : tab),
           showRequestNameModal: false,
           requestName: '',
           collectionRequests: newCollectionRequests,
@@ -828,7 +807,7 @@ const ApiDebugTool: React.FC = () => {
         setAppState(prev => {
           const newCollectionRequests = new Map(prev.collectionRequests);
           if (requestToSave.collectionId) {
-            const requests = newCollectionRequests.get(requestToSave.collectionId) || [];
+            const requests = [...(newCollectionRequests.get(requestToSave.collectionId) || [])];
             const index = requests.findIndex(r => r.id === requestToSave.id);
             if (index >= 0) {
               requests[index] = requestToSave;
@@ -838,6 +817,9 @@ const ApiDebugTool: React.FC = () => {
           return {
             ...prev,
             currentRequest: requestToSave,
+            openTabs: prev.openTabs.map(tab => tab.requestId === requestToSave.id
+              ? { ...tab, request: requestToSave }
+              : tab),
             collectionRequests: newCollectionRequests,
           };
         });
@@ -854,8 +836,26 @@ const ApiDebugTool: React.FC = () => {
   const cancelRequest = () => {
     if (appState.requestAbortController) {
       appState.requestAbortController.abort();
-      setAppState(prev => ({ ...prev, sending: false, requestAbortController: null }));
-      message.info('Request cancelled');
+    }
+  };
+
+  const saveSettings = async () => {
+    if (!appState.settings) return;
+    const settings: AppSettings = {
+      ...appState.settings,
+      defaultTimeout: Math.max(0, Number(appState.settings.defaultTimeout) || 0),
+      historyExpireDays: Math.max(1, Number(appState.settings.historyExpireDays) || 30),
+      maxHistorySize: Math.max(1, Number(appState.settings.maxHistorySize) || 1000),
+      updatedAt: Date.now(),
+    };
+    try {
+      await indexedDBService.saveSettings(settings);
+      await indexedDBService.clearOldHistory(settings.historyExpireDays, settings.maxHistorySize);
+      const history = await indexedDBService.getHistory(Math.min(settings.maxHistorySize, 200));
+      setAppState(prev => ({ ...prev, settings, history, showSettingsModal: false }));
+      message.success('设置已保存');
+    } catch (error: any) {
+      message.error(`设置保存失败: ${error.message}`);
     }
   };
 
@@ -894,12 +894,13 @@ const ApiDebugTool: React.FC = () => {
       // Create response from stored data
       let responseToLoad: HttpResponse | null = null;
       if (entry.responseBody !== undefined && entry.responseHeaders) {
+        const responseLanguage = detectResponseLanguage(entry.responseBody, entry.responseHeaders['content-type'] || '');
         responseToLoad = {
           status: entry.status || 200,
           statusText: entry.status === 200 ? 'OK' : `Error ${entry.status}`,
           headers: entry.responseHeaders,
           body: entry.responseBody,
-          bodyType: detectResponseLanguage(entry.responseBody, entry.responseHeaders['content-type'] || '') as any,
+          bodyType: responseLanguage === 'plaintext' ? 'text' : responseLanguage as HttpResponse['bodyType'],
           responseTime: entry.responseTime || 0,
           responseSize: entry.responseSize || 0,
           receivedAt: entry.executedAt,
@@ -909,6 +910,11 @@ const ApiDebugTool: React.FC = () => {
       setAppState(prev => ({
         ...prev,
         currentRequest: requestToLoad,
+        openTabs: [
+          ...prev.openTabs.filter(tab => tab.requestId !== requestToLoad!.id && !tab.isTemporary),
+          { requestId: requestToLoad!.id, request: requestToLoad!, isPersistent: true },
+        ],
+        activeTabId: requestToLoad!.id,
         response: responseToLoad,
       }));
     } catch (error) {
@@ -1017,11 +1023,19 @@ const ApiDebugTool: React.FC = () => {
             newExpanded.delete(collectionId);
             const newRequests = new Map(prev.collectionRequests);
             newRequests.delete(collectionId);
+            const removedRequestIds = new Set(
+              (prev.collectionRequests.get(collectionId) || []).map(request => request.id)
+            );
+            const openTabs = prev.openTabs.filter(tab => !removedRequestIds.has(tab.requestId));
+            const currentRequestRemoved = !!prev.currentRequest && removedRequestIds.has(prev.currentRequest.id);
             return {
               ...prev,
               collections: prev.collections.filter(c => c.id !== collectionId),
               currentCollectionId: prev.currentCollectionId === collectionId ? null : prev.currentCollectionId,
-              currentRequest: prev.currentRequest?.collectionId === collectionId ? null : prev.currentRequest,
+              currentRequest: currentRequestRemoved ? null : prev.currentRequest,
+              openTabs,
+              activeTabId: currentRequestRemoved ? null : prev.activeTabId,
+              response: currentRequestRemoved ? null : prev.response,
               expandedCollections: newExpanded,
               collectionRequests: newRequests,
             };
@@ -1092,7 +1106,7 @@ const ApiDebugTool: React.FC = () => {
         }
         
         // Add to new collection
-        const newRequests = newCollectionRequests.get(appState.editRequestModalCollectionId!) || [];
+        const newRequests = [...(newCollectionRequests.get(appState.editRequestModalCollectionId!) || [])];
         const existingIndex = newRequests.findIndex(r => r.id === appState.editRequestModalId);
         if (existingIndex >= 0) {
           newRequests[existingIndex] = updated;
@@ -1152,6 +1166,9 @@ const ApiDebugTool: React.FC = () => {
               ...prev,
               collectionRequests: newCollectionRequests,
               currentRequest: prev.currentRequest?.id === appState.editRequestModalId ? null : prev.currentRequest,
+              openTabs: prev.openTabs.filter(tab => tab.requestId !== appState.editRequestModalId),
+              activeTabId: prev.activeTabId === appState.editRequestModalId ? null : prev.activeTabId,
+              response: prev.currentRequest?.id === appState.editRequestModalId ? null : prev.response,
               showEditRequestModal: false,
               editRequestModalId: null,
               editRequestModalName: '',
@@ -1210,7 +1227,8 @@ const ApiDebugTool: React.FC = () => {
     try {
       const collection = await indexedDBService.getCollection(appState.currentCollectionId);
       if (collection) {
-        const json = importExportService.exportCollectionAsJSON(collection);
+        const requests = await indexedDBService.getRequestsByCollection(collection.id);
+        const json = importExportService.exportCollectionAsJSON({ ...collection, items: requests });
         importExportService.downloadFile(json, `${collection.name}_${Date.now()}.json`);
         message.success('文件夹已导出');
       }
@@ -1263,10 +1281,34 @@ const ApiDebugTool: React.FC = () => {
       // Try to import as collection first, then as request
       if (data.items) {
         const collection = await importExportService.importCollectionFromJSON(content);
-        await indexedDBService.createCollection(collection);
+        const newCollectionId = `col_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const importedRequests = (collection.items || []).filter((item: any) => item?.method && item?.url);
+        const importedCollection: Collection = {
+          ...collection,
+          id: newCollectionId,
+          name: collection.name,
+          items: [],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        await indexedDBService.createCollection(importedCollection);
+        const savedRequests: HttpRequest[] = [];
+        for (const request of importedRequests as HttpRequest[]) {
+          const savedRequest = {
+            ...request,
+            id: `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+            collectionId: newCollectionId,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          };
+          await indexedDBService.createRequest(savedRequest);
+          savedRequests.push(savedRequest);
+        }
         setAppState(prev => ({
           ...prev,
-          collections: [...prev.collections, collection],
+          collections: [...prev.collections, importedCollection],
+          collectionRequests: new Map(prev.collectionRequests).set(newCollectionId, savedRequests),
+          expandedCollections: new Set([...prev.expandedCollections, newCollectionId]),
           showImportModal: false,
         }));
         message.success('文件夹导入成功');
@@ -1333,6 +1375,41 @@ const ApiDebugTool: React.FC = () => {
         }
       },
     });
+  };
+
+  const addVariable = () => {
+    if (!appState.settings) return;
+    const variable: KeyValuePair = {
+      id: `variable_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      key: '',
+      value: '',
+      enabled: true,
+      description: '',
+    };
+    setAppState(prev => ({
+      ...prev,
+      settings: prev.settings ? { ...prev.settings, variables: [...prev.settings.variables, variable] } : null,
+    }));
+  };
+
+  const updateVariable = (id: string, updates: Partial<KeyValuePair>) => {
+    setAppState(prev => ({
+      ...prev,
+      settings: prev.settings ? {
+        ...prev.settings,
+        variables: prev.settings.variables.map(variable => variable.id === id ? { ...variable, ...updates } : variable),
+      } : null,
+    }));
+  };
+
+  const removeVariable = (id: string) => {
+    setAppState(prev => ({
+      ...prev,
+      settings: prev.settings ? {
+        ...prev.settings,
+        variables: prev.settings.variables.filter(variable => variable.id !== id),
+      } : null,
+    }));
   };
 
   // Helper: Parse URL query params
@@ -1434,14 +1511,7 @@ const ApiDebugTool: React.FC = () => {
     if (!appState.currentRequest) return;
     try {
       const newParams = parseUrlParams(url);
-      if (newParams.length > 0) {
-        updateCurrentRequest({
-          url,
-          params: newParams,
-        });
-      } else {
-        updateCurrentRequest({ url });
-      }
+      updateCurrentRequest({ url, params: newParams });
     } catch {
       updateCurrentRequest({ url });
     }
@@ -1822,6 +1892,7 @@ const ApiDebugTool: React.FC = () => {
                     ...prev,
                     currentRequest: tab.request,
                     activeTabId: tab.requestId,
+                    response: null,
                   }))}
                 >
                   <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -1868,7 +1939,7 @@ const ApiDebugTool: React.FC = () => {
                   <Select
                     value={appState.currentRequest.method}
                     onChange={(method) => updateCurrentRequest({ method })}
-                    style={{ width: 80 }}
+                    style={{ width: 105 }}
                   >
                     {Object.values(HttpMethod).map((m: string) => (
                       <Select.Option key={m} value={m}>{m}</Select.Option>
@@ -1885,8 +1956,7 @@ const ApiDebugTool: React.FC = () => {
                   <Button
                     type="primary"
                     icon={<SendOutlined />}
-                    loading={appState.sending}
-                    onClick={sendRequest}
+                    onClick={appState.sending ? cancelRequest : sendRequest}
                     danger={appState.sending}
                     style={{ minWidth: 80 }}
                   >
@@ -1901,8 +1971,8 @@ const ApiDebugTool: React.FC = () => {
                   <Button
                     icon={<CopyOutlined />}
                     onClick={() => {
-                      const curlCmd = generateCurlCommand(appState.currentRequest!);
-                      navigator.clipboard.writeText(curlCmd).then(() => {
+                      const curlCmd = importExportService.exportRequestAsCurl(appState.currentRequest!);
+                      importExportService.copyToClipboard(curlCmd).then(() => {
                         message.success('cURL 命令已复制到剪贴板');
                       }).catch(err => {
                         console.error('Failed to copy:', err);
@@ -2070,6 +2140,114 @@ const ApiDebugTool: React.FC = () => {
                     </div>
                   </TabPane>
 
+                  <TabPane tab="Auth" key="auth" style={{ flex: 1, overflow: 'auto' }}>
+                    <div style={{ padding: 16, maxWidth: 720 }}>
+                      <label style={{ display: 'block', marginBottom: 8, fontWeight: 600 }}>认证类型</label>
+                      <Select
+                        value={appState.currentRequest.auth?.type || AuthType.NONE}
+                        onChange={(type: AuthType) => updateCurrentRequest({ auth: { type } })}
+                        style={{ width: 240, marginBottom: 20 }}
+                      >
+                        <Select.Option value={AuthType.NONE}>无认证</Select.Option>
+                        <Select.Option value={AuthType.BEARER}>Bearer Token</Select.Option>
+                        <Select.Option value={AuthType.BASIC}>Basic Auth</Select.Option>
+                        <Select.Option value={AuthType.API_KEY}>API Key</Select.Option>
+                      </Select>
+
+                      {appState.currentRequest.auth?.type === AuthType.BEARER && (
+                        <Input.Password
+                          addonBefore="Token"
+                          placeholder="输入 Bearer Token，支持 {{variable}}"
+                          value={appState.currentRequest.auth.bearer?.token || ''}
+                          onChange={event => updateCurrentRequest({
+                            auth: { type: AuthType.BEARER, bearer: { token: event.target.value } },
+                          })}
+                        />
+                      )}
+                      {appState.currentRequest.auth?.type === AuthType.BASIC && (
+                        <Space direction="vertical" style={{ width: '100%' }}>
+                          <Input
+                            addonBefore="用户名"
+                            value={appState.currentRequest.auth.basic?.username || ''}
+                            onChange={event => updateCurrentRequest({
+                              auth: {
+                                type: AuthType.BASIC,
+                                basic: {
+                                  username: event.target.value,
+                                  password: appState.currentRequest!.auth.basic?.password || '',
+                                },
+                              },
+                            })}
+                          />
+                          <Input.Password
+                            addonBefore="密码"
+                            value={appState.currentRequest.auth.basic?.password || ''}
+                            onChange={event => updateCurrentRequest({
+                              auth: {
+                                type: AuthType.BASIC,
+                                basic: {
+                                  username: appState.currentRequest!.auth.basic?.username || '',
+                                  password: event.target.value,
+                                },
+                              },
+                            })}
+                          />
+                        </Space>
+                      )}
+                      {appState.currentRequest.auth?.type === AuthType.API_KEY && (
+                        <Space direction="vertical" style={{ width: '100%' }}>
+                          <Input
+                            addonBefore="Key"
+                            value={appState.currentRequest.auth.apiKey?.key || ''}
+                            onChange={event => updateCurrentRequest({
+                              auth: {
+                                type: AuthType.API_KEY,
+                                apiKey: {
+                                  key: event.target.value,
+                                  value: appState.currentRequest!.auth.apiKey?.value || '',
+                                  in: appState.currentRequest!.auth.apiKey?.in || 'header',
+                                },
+                              },
+                            })}
+                          />
+                          <Input.Password
+                            addonBefore="Value"
+                            value={appState.currentRequest.auth.apiKey?.value || ''}
+                            onChange={event => updateCurrentRequest({
+                              auth: {
+                                type: AuthType.API_KEY,
+                                apiKey: {
+                                  key: appState.currentRequest!.auth.apiKey?.key || '',
+                                  value: event.target.value,
+                                  in: appState.currentRequest!.auth.apiKey?.in || 'header',
+                                },
+                              },
+                            })}
+                          />
+                          <Radio.Group
+                            value={appState.currentRequest.auth.apiKey?.in || 'header'}
+                            onChange={event => updateCurrentRequest({
+                              auth: {
+                                type: AuthType.API_KEY,
+                                apiKey: {
+                                  key: appState.currentRequest!.auth.apiKey?.key || '',
+                                  value: appState.currentRequest!.auth.apiKey?.value || '',
+                                  in: event.target.value,
+                                },
+                              },
+                            })}
+                          >
+                            <Radio value="header">请求头</Radio>
+                            <Radio value="query">查询参数</Radio>
+                          </Radio.Group>
+                        </Space>
+                      )}
+                      <p style={{ marginTop: 16, color: '#888', fontSize: 12 }}>
+                        认证信息仅保存在本机 IndexedDB 中；导出请求时请注意敏感信息。
+                      </p>
+                    </div>
+                  </TabPane>
+
                   <TabPane tab="Body" key="body" style={{ flex: 1, overflow: 'hidden' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%', overflow: 'hidden', padding: '12px 16px' }}>
                       <div style={{ flexShrink: 0 }}>
@@ -2081,7 +2259,7 @@ const ApiDebugTool: React.FC = () => {
                           })}
                           style={{ display: 'flex', gap: 16 }}
                         >
-                          {Object.values(BodyType).map((t: string) => (
+                          {Object.values(BodyType).filter(type => type !== BodyType.BINARY).map((t: string) => (
                             <Radio key={t} value={t}>{t}</Radio>
                           ))}
                         </Radio.Group>
@@ -2454,7 +2632,7 @@ const ApiDebugTool: React.FC = () => {
                     </div>
                     <Tabs defaultActiveKey="body" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }} tabBarStyle={{ margin: 0, borderBottom: '1px solid #f0f0f0', background: '#fafafa', flexShrink: 0 }}>
                       <TabPane tab="Body" key="body" style={{ flex: 1, overflow: 'hidden' }}>
-                        <div style={{ height: 900, overflow: 'hidden', background: '#fff', border: '1px solid #d9d9d9', borderRadius: 4, position: 'relative' }}>
+                        <div style={{ height: '100%', minHeight: 300, overflow: 'hidden', background: '#fff', border: '1px solid #d9d9d9', borderRadius: 4, position: 'relative' }}>
                           <Button
                             type="text"
                             size="small"
@@ -2494,7 +2672,7 @@ const ApiDebugTool: React.FC = () => {
                         </div>
                       </TabPane>
                       <TabPane tab="Headers" key="headers" style={{ flex: 1, overflow: 'hidden' }}>
-                        <div style={{ height: 900, overflow: 'auto', background: '#fff' }}>
+                        <div style={{ height: '100%', overflow: 'auto', background: '#fff' }}>
                           {appState.response && Object.keys(appState.response.headers).length > 0 ? (
                             <div style={{ border: '1px solid #d9d9d9', borderRadius: 4, overflow: 'hidden' }}>
                               {/* Header */}
@@ -2516,7 +2694,7 @@ const ApiDebugTool: React.FC = () => {
                         </div>
                       </TabPane>
                       <TabPane tab="Cookies" key="cookies" style={{ flex: 1, overflow: 'hidden' }}>
-                        <div style={{ height: 900, overflow: 'auto', background: '#fff' }}>
+                        <div style={{ height: '100%', overflow: 'auto', background: '#fff' }}>
                           {appState.response && appState.response.headers['set-cookie'] ? (
                             <div style={{ border: '1px solid #d9d9d9', borderRadius: 4, overflow: 'hidden' }}>
                               {/* Header */}
@@ -2550,7 +2728,7 @@ const ApiDebugTool: React.FC = () => {
                         </div>
                       </TabPane>
                       <TabPane tab="Test Results" key="test" style={{ flex: 1, overflow: 'hidden' }}>
-                        <div style={{ height: 900, overflow: 'auto', background: '#fff', padding: '16px' }}>
+                        <div style={{ height: '100%', overflow: 'auto', background: '#fff', padding: '16px' }}>
                           <div style={{ color: '#999', textAlign: 'center', paddingTop: '100px' }}>
                             <p>No test results yet</p>
                             <p style={{ fontSize: 12 }}>Run tests from the Pre-request Script or Post-response Script</p>
@@ -2593,15 +2771,16 @@ const ApiDebugTool: React.FC = () => {
         title="设置"
         open={appState.showSettingsModal}
         onCancel={() => setAppState(prev => ({ ...prev, showSettingsModal: false }))}
-        footer={[
-          <Button key="close" onClick={() => setAppState(prev => ({ ...prev, showSettingsModal: false }))}>关闭</Button>,
-        ]}
+        onOk={saveSettings}
+        okText="保存"
+        cancelText="取消"
       >
         <div style={{ marginBottom: 20 }}>
           <p><strong>超时设置 (毫秒):</strong></p>
           <Input
             type="number"
-            value={appState.settings?.defaultTimeout || 30000}
+            min={0}
+            value={appState.settings?.defaultTimeout ?? 30000}
             onChange={(e) => setAppState(prev => ({
               ...prev,
               settings: prev.settings ? { ...prev.settings, defaultTimeout: Number(e.target.value) } : null,
@@ -2612,7 +2791,8 @@ const ApiDebugTool: React.FC = () => {
           <p><strong>历史过期天数:</strong></p>
           <Input
             type="number"
-            value={appState.settings?.historyExpireDays || 30}
+            min={1}
+            value={appState.settings?.historyExpireDays ?? 30}
             onChange={(e) => setAppState(prev => ({
               ...prev,
               settings: prev.settings ? { ...prev.settings, historyExpireDays: Number(e.target.value) } : null,
@@ -2623,12 +2803,51 @@ const ApiDebugTool: React.FC = () => {
           <p><strong>最大历史条数:</strong></p>
           <Input
             type="number"
-            value={appState.settings?.maxHistorySize || 1000}
+            min={1}
+            value={appState.settings?.maxHistorySize ?? 1000}
             onChange={(e) => setAppState(prev => ({
               ...prev,
               settings: prev.settings ? { ...prev.settings, maxHistorySize: Number(e.target.value) } : null,
             }))}
           />
+        </div>
+        <Divider />
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <strong>全局变量</strong>
+            <Button size="small" icon={<PlusOutlined />} onClick={addVariable}>添加变量</Button>
+          </div>
+          <p style={{ color: '#888', fontSize: 12 }}>在 URL、参数、请求头和 Body 中使用 {'{{变量名}}'}。</p>
+          <div style={{ maxHeight: 240, overflow: 'auto' }}>
+            {(appState.settings?.variables || []).map(variable => (
+              <div key={variable.id} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 1fr 32px', gap: 8, marginBottom: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={variable.enabled}
+                  onChange={() => updateVariable(variable.id, { enabled: !variable.enabled })}
+                />
+                <Input
+                  size="small"
+                  placeholder="变量名"
+                  value={variable.key}
+                  onChange={event => updateVariable(variable.id, { key: event.target.value })}
+                />
+                <Input.Password
+                  size="small"
+                  placeholder="变量值"
+                  value={variable.value}
+                  onChange={event => updateVariable(variable.id, { value: event.target.value })}
+                />
+                <Button
+                  type="text"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={() => removeVariable(variable.id)}
+                />
+              </div>
+            ))}
+          </div>
         </div>
       </Modal>
 

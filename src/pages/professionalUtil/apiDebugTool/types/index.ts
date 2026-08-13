@@ -3,6 +3,11 @@
 export enum HttpMethod {
   GET = 'GET',
   POST = 'POST',
+  PUT = 'PUT',
+  PATCH = 'PATCH',
+  DELETE = 'DELETE',
+  HEAD = 'HEAD',
+  OPTIONS = 'OPTIONS',
 }
 
 export enum BodyType {
@@ -166,6 +171,7 @@ export interface HistoryEntry {
   curl?: string; // Store curl command
   responseBody?: string; // Store response body
   responseHeaders?: Record<string, string>; // Store response headers
+  error?: string;
 }
 
 // Global variables and settings

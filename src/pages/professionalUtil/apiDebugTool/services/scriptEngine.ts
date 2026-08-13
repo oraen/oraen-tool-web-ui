@@ -13,6 +13,7 @@ export interface ScriptResult {
   output: string;
   error?: string;
   modifiedRequest?: Partial<HttpRequest>;
+  modifiedVariables?: Record<string, string>;
 }
 
 class ScriptEngine {
@@ -24,15 +25,18 @@ class ScriptEngine {
     const modifiedRequest: Partial<HttpRequest> = {};
 
     return {
+      modifiedRequest,
       // Request helpers
       request: {
-        url: context.request.url,
-        method: context.request.method,
+        get url() { return modifiedRequest.url ?? context.request.url; },
+        set url(value: string) { modifiedRequest.url = value; },
+        get method() { return modifiedRequest.method ?? context.request.method; },
+        set method(value: any) { modifiedRequest.method = value; },
         addHeader: (key: string, value: string) => {
           if (!modifiedRequest.headers) {
             modifiedRequest.headers = [...context.request.headers];
           }
-          const existing = modifiedRequest.headers?.find(h => h.key === key);
+          const existing = modifiedRequest.headers?.find(h => h.key.toLowerCase() === key.toLowerCase());
           if (existing) {
             existing.value = value;
           } else {
@@ -53,6 +57,20 @@ class ScriptEngine {
               content: body,
             },
           };
+        },
+        setHeader: (key: string, value: string) => {
+          if (!modifiedRequest.headers) modifiedRequest.headers = [...context.request.headers];
+          const existing = modifiedRequest.headers.find(h => h.key.toLowerCase() === key.toLowerCase());
+          if (existing) {
+            existing.value = value;
+            existing.enabled = true;
+          } else {
+            modifiedRequest.headers.push({ id: `header_${Date.now()}_${Math.random()}`, key, value, enabled: true });
+          }
+        },
+        removeHeader: (key: string) => {
+          modifiedRequest.headers = (modifiedRequest.headers || [...context.request.headers])
+            .filter(h => h.key.toLowerCase() !== key.toLowerCase());
         },
       },
 
@@ -105,8 +123,10 @@ class ScriptEngine {
     }
 
     try {
+      const originalVariables = { ...context.variables };
       const sandbox = this.createSandbox(context);
-      const fn = new Function(
+      const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+      const fn = new AsyncFunction(
         'request',
         'response',
         'variables',
@@ -155,7 +175,12 @@ class ScriptEngine {
       return {
         success: true,
         output: output.join('\n'),
-        modifiedRequest: context.request.body ? {} : undefined,
+        modifiedRequest: Object.keys(sandbox.modifiedRequest).length > 0
+          ? sandbox.modifiedRequest
+          : undefined,
+        modifiedVariables: Object.fromEntries(
+          Object.entries(context.variables).filter(([key, value]) => originalVariables[key] !== value)
+        ),
       };
     } catch (error: any) {
       return {
@@ -179,8 +204,10 @@ class ScriptEngine {
     }
 
     try {
+      const originalVariables = { ...context.variables };
       const sandbox = this.createSandbox(context);
-      const fn = new Function(
+      const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+      const fn = new AsyncFunction(
         'request',
         'response',
         'variables',
@@ -229,6 +256,9 @@ class ScriptEngine {
       return {
         success: true,
         output: output.join('\n'),
+        modifiedVariables: Object.fromEntries(
+          Object.entries(context.variables).filter(([key, value]) => originalVariables[key] !== value)
+        ),
       };
     } catch (error: any) {
       return {

@@ -24,8 +24,15 @@ class IndexedDBService {
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         this.db = request.result;
+        this.db.onversionchange = () => {
+          this.db?.close();
+          this.db = null;
+          this.initPromise = null;
+        };
         resolve();
       };
+
+      request.onblocked = () => reject(new Error('Database upgrade is blocked by another open window'));
 
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
@@ -54,7 +61,12 @@ class IndexedDBService {
       };
     });
 
-    return this.initPromise;
+    try {
+      return await this.initPromise;
+    } catch (error) {
+      this.initPromise = null;
+      throw error;
+    }
   }
 
   private async transaction<T>(
@@ -65,11 +77,38 @@ class IndexedDBService {
     if (!this.db) await this.init();
     return new Promise((resolve, reject) => {
       const tx = this.db!.transaction(stores, mode);
-      tx.onerror = () => reject(tx.error);
-      tx.onabort = () => reject(new Error('Transaction aborted'));
+      let callbackResult: T;
+      let callbackFinished = false;
+      let transactionFinished = false;
+      let settled = false;
+      const finish = () => {
+        if (!settled && callbackFinished && transactionFinished) {
+          settled = true;
+          resolve(callbackResult);
+        }
+      };
+      const fail = (error: unknown) => {
+        if (!settled) {
+          settled = true;
+          reject(error instanceof Error ? error : new Error(String(error || 'IndexedDB transaction failed')));
+        }
+      };
+      tx.onerror = () => fail(tx.error);
+      tx.onabort = () => fail(tx.error || new Error('Transaction aborted'));
+      tx.oncomplete = () => {
+        transactionFinished = true;
+        finish();
+      };
       callback(tx)
-        .then(resolve)
-        .catch(reject);
+        .then(result => {
+          callbackResult = result;
+          callbackFinished = true;
+          finish();
+        })
+        .catch(error => {
+          try { tx.abort(); } catch {}
+          fail(error);
+        });
     });
   }
 
@@ -250,6 +289,7 @@ class IndexedDBService {
           allRequest.onsuccess = () => {
             const allEntries = allRequest.result as HistoryEntry[];
             
+            const unexpiredEntries = allEntries.filter(entry => entry.executedAt >= cutoffTime);
             // Delete expired entries
             allEntries.forEach(entry => {
               if (entry.executedAt < cutoffTime) {
@@ -258,8 +298,8 @@ class IndexedDBService {
             });
 
             // If still exceeds max size, delete oldest entries
-            if (allEntries.length > maxSize) {
-              const sorted = allEntries.sort((a, b) => b.executedAt - a.executedAt);
+            if (unexpiredEntries.length > maxSize) {
+              const sorted = unexpiredEntries.sort((a, b) => b.executedAt - a.executedAt);
               for (let i = maxSize; i < sorted.length; i++) {
                 store.delete(sorted[i].id);
               }
@@ -314,10 +354,6 @@ class IndexedDBService {
         tx.objectStore('history').clear();
         tx.objectStore('settings').clear();
 
-        const completeRequest = tx.oncomplete;
-        if (completeRequest) {
-          tx.oncomplete = () => resolve();
-        }
         resolve();
       });
     });

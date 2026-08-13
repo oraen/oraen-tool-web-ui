@@ -78,7 +78,7 @@ class VariableSystem {
       }
 
       // Otherwise, look up in variables
-      return variables[key] || match;
+      return Object.prototype.hasOwnProperty.call(variables, key) ? variables[key] : match;
     });
   }
 
@@ -96,6 +96,14 @@ class VariableSystem {
 
       if (typeof value === 'string') {
         result[key] = this.replaceVariables(value, variables);
+      } else if (Array.isArray(value)) {
+        result[key] = value.map(item => {
+          if (typeof item === 'string') return this.replaceVariables(item, variables);
+          if (typeof item === 'object' && item !== null) {
+            return this.replaceVariablesInObject(item, variables);
+          }
+          return item;
+        });
       } else if (typeof value === 'object' && value !== null) {
         result[key] = this.replaceVariablesInObject(value, variables);
       }
