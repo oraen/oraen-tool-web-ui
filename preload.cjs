@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('electron', {
   // This bypasses CORS since we use native Node.js http/https
   makeRequest: (requestData) => ipcRenderer.invoke('http-request', requestData),
   cancelRequest: (requestId) => ipcRenderer.send('http-request-cancel', requestId),
+  saveTextFile: (options) => ipcRenderer.invoke('save-text-file', options),
 });
 
 // Also expose __ELECTRON__ flag as backup detection method

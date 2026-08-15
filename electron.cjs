@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const path = require('path');
 const https = require('https');
 const http = require('http');
@@ -48,6 +48,23 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  ipcMain.handle('save-text-file', async (event, options) => {
+    try {
+      const ownerWindow = BrowserWindow.fromWebContents(event.sender);
+      const result = await dialog.showSaveDialog(ownerWindow, {
+        title: '保存备忘录',
+        defaultPath: options?.defaultPath || '备忘录.txt',
+        filters: Array.isArray(options?.filters) ? options.filters : [{ name: '文本文件', extensions: ['txt'] }],
+      });
+      if (result.canceled || !result.filePath) return { canceled: true };
+
+      await fs.promises.writeFile(result.filePath, String(options?.content || ''), 'utf8');
+      return { canceled: false, filePath: result.filePath };
+    } catch (error) {
+      return { canceled: false, error: error.message || String(error) };
+    }
+  });
+
   // Register IPC handler AFTER app is ready
   // This bypasses CORS completely since we use native Node.js http module
   ipcMain.handle('http-request', async (event, requestData) => {

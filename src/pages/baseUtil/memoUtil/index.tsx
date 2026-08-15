@@ -6,6 +6,7 @@ import {
   Input,
   List,
   message,
+  Modal,
   Popconfirm,
   Select,
   Space,
@@ -20,7 +21,11 @@ import {
   DeleteOutlined,
   FileTextOutlined,
   LoadingOutlined,
+  LockOutlined,
   PlusOutlined,
+  SaveOutlined,
+  UnlockOutlined,
+  UploadOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
 import { Editor } from "@monaco-editor/react";
@@ -34,6 +39,7 @@ const FORMAT_OPTIONS = [
   { value: "md", label: "Markdown" },
   { value: "json", label: "JSON" },
   { value: "sql", label: "SQL" },
+  { value: "csv", label: "CSV（纯文本）" },
   { value: "html", label: "HTML" },
   { value: "css", label: "CSS" },
   { value: "javascript", label: "JavaScript" },
@@ -56,8 +62,66 @@ const MONACO_LANGUAGE: Record<string, string> = {
   md: "markdown",
   yaml: "yaml",
   toml: "ini",
+  csv: "plaintext",
   other: "plaintext",
 };
+
+const FILE_FORMATS: Record<string, { extension: string; mime: string; label: string }> = {
+  text: { extension: "txt", mime: "text/plain", label: "文本文件" },
+  md: { extension: "md", mime: "text/markdown", label: "Markdown 文件" },
+  json: { extension: "json", mime: "application/json", label: "JSON 文件" },
+  sql: { extension: "sql", mime: "application/sql", label: "SQL 文件" },
+  csv: { extension: "csv", mime: "text/csv", label: "CSV 文件" },
+  html: { extension: "html", mime: "text/html", label: "HTML 文件" },
+  css: { extension: "css", mime: "text/css", label: "CSS 文件" },
+  javascript: { extension: "js", mime: "text/javascript", label: "JavaScript 文件" },
+  typescript: { extension: "ts", mime: "text/plain", label: "TypeScript 文件" },
+  yaml: { extension: "yml", mime: "application/yaml", label: "YAML 文件" },
+  toml: { extension: "toml", mime: "application/toml", label: "TOML 文件" },
+  xml: { extension: "xml", mime: "application/xml", label: "XML 文件" },
+  shell: { extension: "sh", mime: "text/x-shellscript", label: "Shell 文件" },
+  python: { extension: "py", mime: "text/x-python", label: "Python 文件" },
+  java: { extension: "java", mime: "text/x-java-source", label: "Java 文件" },
+  csharp: { extension: "cs", mime: "text/plain", label: "C# 文件" },
+  cpp: { extension: "cpp", mime: "text/x-c++src", label: "C++ 文件" },
+  go: { extension: "go", mime: "text/x-go", label: "Go 文件" },
+  rust: { extension: "rs", mime: "text/plain", label: "Rust 文件" },
+  other: { extension: "txt", mime: "text/plain", label: "文本文件" },
+};
+
+const FORMAT_BY_EXTENSION: Record<string, string> = {
+  txt: "text",
+  text: "text",
+  md: "md",
+  markdown: "md",
+  json: "json",
+  sql: "sql",
+  csv: "csv",
+  html: "html",
+  htm: "html",
+  css: "css",
+  js: "javascript",
+  jsx: "javascript",
+  ts: "typescript",
+  tsx: "typescript",
+  yaml: "yaml",
+  yml: "yaml",
+  toml: "toml",
+  xml: "xml",
+  sh: "shell",
+  bash: "shell",
+  py: "python",
+  java: "java",
+  cs: "csharp",
+  c: "cpp",
+  h: "cpp",
+  cpp: "cpp",
+  hpp: "cpp",
+  go: "go",
+  rs: "rust",
+};
+
+const IMPORT_ACCEPT = Object.keys(FORMAT_BY_EXTENSION).map((extension) => `.${extension}`).join(",");
 
 type SaveState = "saved" | "dirty" | "saving" | "error";
 
@@ -87,6 +151,7 @@ const MemoUtil: React.FC = () => {
   const mountedRef = useRef(true);
   const renameCancelledRef = useRef(false);
   const saveErrorShownRef = useRef(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const selectedMemo = useMemo(
     () => memos.find((memo) => memo.id === selectedId) || null,
@@ -205,6 +270,7 @@ const MemoUtil: React.FC = () => {
       title,
       content: "",
       language: "text",
+      locked: false,
       createdAt: now,
       updatedAt: now,
     };
@@ -278,6 +344,108 @@ const MemoUtil: React.FC = () => {
       message.success("备忘录内容已复制");
     } catch (error) {
       message.error(error instanceof Error ? error.message : "复制失败，请手动复制");
+    }
+  };
+
+  const saveMemoAsFile = async () => {
+    if (!selectedMemo) return;
+    const format = FILE_FORMATS[selectedMemo.language] || FILE_FORMATS.other;
+    const safeTitle = (selectedMemo.title || "备忘录")
+      .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_")
+      .replace(/[. ]+$/g, "") || "备忘录";
+    const suffix = `.${format.extension}`;
+    const suggestedName = safeTitle.toLowerCase().endsWith(suffix) ? safeTitle : `${safeTitle}${suffix}`;
+
+    try {
+      const electron = (window as any).electron;
+      if (typeof electron?.saveTextFile === "function") {
+        const result = await electron.saveTextFile({
+          content: selectedMemo.content,
+          defaultPath: suggestedName,
+          filters: [{ name: format.label, extensions: [format.extension] }],
+        });
+        if (result?.canceled) return;
+        if (result?.error) throw new Error(result.error);
+        message.success("备忘录文件保存成功");
+        return;
+      }
+
+      const showSaveFilePicker = (window as any).showSaveFilePicker;
+      if (typeof showSaveFilePicker === "function") {
+        const fileHandle = await showSaveFilePicker({
+          suggestedName,
+          types: [{
+            description: format.label,
+            accept: { [format.mime]: [suffix] },
+          }],
+        });
+        const writable = await fileHandle.createWritable();
+        await writable.write(selectedMemo.content);
+        await writable.close();
+        message.success("备忘录文件保存成功");
+        return;
+      }
+
+      const blob = new Blob([selectedMemo.content], { type: `${format.mime};charset=utf-8` });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = suggestedName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      message.success("文件已开始下载");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      message.error(error instanceof Error ? error.message : "保存文件失败");
+    }
+  };
+
+  const importFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !selectedId) return;
+
+    const targetMemo = memosRef.current.find((memo) => memo.id === selectedId);
+    if (!targetMemo) return;
+    if (targetMemo.locked) {
+      message.warning("请先解锁当前备忘录再导入文件");
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      message.error("文件超过 20 MB，为避免编辑器卡顿，本次未导入");
+      return;
+    }
+
+    try {
+      const content = await file.text();
+      const extension = file.name.split(".").pop()?.toLowerCase() || "";
+      const language = FORMAT_BY_EXTENSION[extension] || targetMemo.language;
+      const applyImport = () => {
+        const latestMemo = memosRef.current.find((memo) => memo.id === targetMemo.id);
+        if (!latestMemo || latestMemo.locked) {
+          message.warning("当前备忘录已被锁定，文件没有导入");
+          return;
+        }
+        updateMemo(targetMemo.id, { content, language });
+        message.success(`已导入 ${file.name}`);
+      };
+
+      if (targetMemo.content) {
+        Modal.confirm({
+          title: "导入文件将覆盖当前内容",
+          content: `确定使用“${file.name}”替换当前备忘录的全部文本吗？`,
+          okText: "导入并覆盖",
+          cancelText: "取消",
+          okButtonProps: { danger: true },
+          onOk: applyImport,
+        });
+      } else {
+        applyImport();
+      }
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "读取文件失败");
     }
   };
 
@@ -411,7 +579,7 @@ const MemoUtil: React.FC = () => {
           {selectedMemo ? (
             <>
               <div className="memo-editor-toolbar" style={{ borderColor: token.colorBorderSecondary }}>
-                <Space>
+                <Space wrap>
                   <Select
                     value={selectedMemo.language}
                     options={FORMAT_OPTIONS}
@@ -422,6 +590,30 @@ const MemoUtil: React.FC = () => {
                   <Button icon={<CopyOutlined />} onClick={copyMemoContent}>
                     一键复制
                   </Button>
+                  <Button
+                    type={selectedMemo.locked ? "primary" : "default"}
+                    icon={selectedMemo.locked ? <UnlockOutlined /> : <LockOutlined />}
+                    onClick={() => updateMemo(selectedMemo.id, { locked: !selectedMemo.locked })}
+                  >
+                    {selectedMemo.locked ? "解锁" : "锁定"}
+                  </Button>
+                  <Button icon={<SaveOutlined />} onClick={saveMemoAsFile}>
+                    保存
+                  </Button>
+                  <Button
+                    icon={<UploadOutlined />}
+                    disabled={selectedMemo.locked}
+                    onClick={() => importInputRef.current?.click()}
+                  >
+                    导入
+                  </Button>
+                  <input
+                    ref={importInputRef}
+                    type="file"
+                    accept={IMPORT_ACCEPT}
+                    style={{ display: "none" }}
+                    onChange={importFile}
+                  />
                 </Space>
                 <Text type="secondary">
                   {selectedMemo.content.length.toLocaleString()} 个字符
@@ -433,11 +625,14 @@ const MemoUtil: React.FC = () => {
                   height="100%"
                   language={MONACO_LANGUAGE[selectedMemo.language] || selectedMemo.language}
                   value={selectedMemo.content}
-                  onChange={(content) => updateMemo(selectedMemo.id, { content: content || "" })}
+                  onChange={(content) => {
+                    if (!selectedMemo.locked) updateMemo(selectedMemo.id, { content: content || "" });
+                  }}
                   theme="vs-light"
                   loading={<div className="memo-editor-loading"><Spin tip="编辑器加载中..." /></div>}
                   options={{
                     automaticLayout: true,
+                    readOnly: selectedMemo.locked,
                     fontSize: 14,
                     lineHeight: 22,
                     minimap: { enabled: false },

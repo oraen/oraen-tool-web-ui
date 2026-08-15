@@ -3,6 +3,7 @@ export interface MemoRecord {
   title: string;
   content: string;
   language: string;
+  locked: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -58,7 +59,10 @@ class MemoDatabase {
       const request = transaction.objectStore(STORE_NAME).getAll();
       request.onerror = () => reject(request.error || new Error("读取备忘录失败"));
       request.onsuccess = () => {
-        const records = (request.result || []) as MemoRecord[];
+        const records = ((request.result || []) as Array<MemoRecord & { locked?: boolean }>).map((record) => ({
+          ...record,
+          locked: record.locked === true,
+        }));
         resolve(records.sort((a, b) => b.createdAt - a.createdAt));
       };
     });
