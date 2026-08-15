@@ -1,20 +1,53 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {Card, Button, Typography, Row, Col, message, Input, Tag} from "antd";
-import {all, create, evaluate} from "mathjs"; // 引入 mathjs
 import { Decimal } from "decimal.js"; // 引入 decimal.js
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
 
+type MathEngine = {
+  evaluate: (expression: string) => any;
+};
+
+let mathEnginePromise: Promise<MathEngine> | null = null;
+
+const loadMathEngine = () => {
+  if (!mathEnginePromise) {
+    mathEnginePromise = import("mathjs")
+      .then(({ all, create }) => create(all, {
+        number: "BigNumber",
+        precision: 64,
+      }))
+      .catch((error) => {
+        mathEnginePromise = null;
+        throw error;
+      });
+  }
+  return mathEnginePromise;
+};
+
 const MathUtil: React.FC = () => {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [error, setError] = useState(""); // 错误提示
+  const [calculateLoading, setCalculateLoading] = useState(false);
 
-  const math = create(all, {
-    number: "BigNumber", // 使用高精度计算
-    precision: 64, // 设置计算精度为 64 位
-  });
+  useEffect(() => {
+    const warmup = () => void loadMathEngine().catch(() => undefined);
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let idleId: number | undefined;
+
+    if ("requestIdleCallback" in window) {
+      idleId = window.requestIdleCallback(warmup, { timeout: 2000 });
+    } else {
+      timeoutId = setTimeout(warmup, 300);
+    }
+
+    return () => {
+      if (idleId !== undefined) window.cancelIdleCallback(idleId);
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+    };
+  }, []);
 
   //进制转化
   // 新增状态：进制转换相关
@@ -69,11 +102,13 @@ const MathUtil: React.FC = () => {
 
 
 //
-  const handleCalculate = () => {
+  const handleCalculate = async () => {
+    setCalculateLoading(true);
     try {
       // 清理输入：去除空格和换行符
       const cleanedInput = input.replace(/\s+/g, "");
       // 使用 mathjs 计算表达式
+      const math = await loadMathEngine();
       const result = math.evaluate(cleanedInput);
       // 使用 decimal.js 格式化结果，保留 16 位小数
       const formattedResult = new Decimal(result).toDecimalPlaces(16).toFixed().toString();
@@ -82,6 +117,8 @@ const MathUtil: React.FC = () => {
     } catch (error) {
       setError("表达式无效，请检查输入"); // 设置错误提示
       setOutput("");
+    } finally {
+      setCalculateLoading(false);
     }
   };
 
@@ -191,7 +228,7 @@ const MathUtil: React.FC = () => {
             actions={[
               <Row gutter={16} style={{ marginTop: 16 }}>
                 <Col span={12}>
-                  <Button type="primary" block onClick={handleCalculate}>
+                  <Button type="primary" block loading={calculateLoading} onClick={handleCalculate}>
                     计算结果
                   </Button>
                 </Col>

@@ -32,20 +32,17 @@ import JSZip from "jszip";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile } from "@ffmpeg/util";
 import { GIFEncoder, quantize, applyPalette } from "gifenc";
-import type { ReamTarget } from "reamkit";
 
 const { Title, Text, Paragraph } = Typography;
 const { Dragger } = Upload;
 
 type ToolMode = "convert" | "merge";
-type FileKind = "image" | "document" | "video" | "unknown";
-type ConvertFormat = "png" | "jpg" | "jpeg" | "svg" | "gif" | "pdf" | "docx" | "doc" | "mp4" | "avi" | "mkv" | "mov";
+type FileKind = "image" | "video" | "unknown";
+type ConvertFormat = "png" | "jpg" | "jpeg" | "svg" | "gif" | "mp4" | "avi" | "mkv" | "mov";
 type ImageQuality = "high" | "balanced" | "small";
 type VideoPreset = "copy" | "fast" | "balanced";
 
 const imageFormats: ConvertFormat[] = ["png", "jpg", "jpeg", "svg", "gif"];
-const documentFormats: ConvertFormat[] = ["pdf", "docx"];
-const documentInputFormats: ConvertFormat[] = ["pdf", "docx", "doc"];
 const videoFormats: ConvertFormat[] = ["mp4", "avi", "mkv", "mov"];
 
 const mimeByFormat: Record<string, string> = {
@@ -80,7 +77,6 @@ const getExtension = (fileName: string) => {
 
 const getFileKind = (format: string): FileKind => {
   if (imageFormats.includes(format as ConvertFormat)) return "image";
-  if (documentInputFormats.includes(format as ConvertFormat)) return "document";
   if (videoFormats.includes(format as ConvertFormat)) return "video";
   return "unknown";
 };
@@ -188,127 +184,6 @@ const wrapSvgFromImage = async (file: File) => {
   return new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
 };
 
-const ensureContentTypeDefault = (xml: string, extension: string, contentType: string) => {
-  if (xml.includes(`Extension="${extension}"`)) return xml;
-  return xml.replace(
-    "</Types>",
-    `<Default Extension="${extension}" ContentType="${contentType}"/></Types>`,
-  );
-};
-
-const ensureContentTypeOverride = (xml: string, partName: string, contentType: string) => {
-  if (xml.includes(`PartName="${partName}"`)) return xml;
-  return xml.replace(
-    "</Types>",
-    `<Override PartName="${partName}" ContentType="${contentType}"/></Types>`,
-  );
-};
-
-const ensureRootRelationship = (xml: string, type: string, target: string) => {
-  if (xml.includes(`Type="${type}"`)) return xml;
-  const ids = Array.from(xml.matchAll(/Id="rId(\d+)"/g)).map((match) => Number(match[1]));
-  const nextId = Math.max(0, ...ids) + 1;
-  return xml.replace(
-    "</Relationships>",
-    `<Relationship Id="rId${nextId}" Type="${type}" Target="${target}"/></Relationships>`,
-  );
-};
-
-const ensurePartRelationship = (xml: string, type: string, target: string) => {
-  if (xml.includes(`Type="${type}"`) || xml.includes(`Target="${target}"`)) return xml;
-  const ids = Array.from(xml.matchAll(/Id="rId(\d+)"/g)).map((match) => Number(match[1]));
-  const nextId = Math.max(0, ...ids) + 1;
-  return xml.replace(
-    "</Relationships>",
-    `<Relationship Id="rId${nextId}" Type="${type}" Target="${target}"/></Relationships>`,
-  );
-};
-
-const normalizeDocxPackage = async (bytes: Uint8Array) => {
-  const zip = await JSZip.loadAsync(bytes);
-  const contentTypesEntry = zip.file("[Content_Types].xml");
-  const rootRelsEntry = zip.file("_rels/.rels");
-
-  if (!contentTypesEntry || !rootRelsEntry || !zip.file("word/document.xml")) {
-    return bytes;
-  }
-
-  let contentTypes = await contentTypesEntry.async("string");
-  contentTypes = ensureContentTypeDefault(contentTypes, "png", "image/png");
-  contentTypes = ensureContentTypeDefault(contentTypes, "jpeg", "image/jpeg");
-  contentTypes = ensureContentTypeDefault(contentTypes, "jpg", "image/jpeg");
-  contentTypes = ensureContentTypeOverride(
-    contentTypes,
-    "/docProps/core.xml",
-    "application/vnd.openxmlformats-package.core-properties+xml",
-  );
-  contentTypes = ensureContentTypeOverride(
-    contentTypes,
-    "/docProps/app.xml",
-    "application/vnd.openxmlformats-officedocument.extended-properties+xml",
-  );
-  contentTypes = ensureContentTypeOverride(
-    contentTypes,
-    "/word/styles.xml",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml",
-  );
-  contentTypes = ensureContentTypeOverride(
-    contentTypes,
-    "/word/settings.xml",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml",
-  );
-
-  let rootRels = await rootRelsEntry.async("string");
-  rootRels = ensureRootRelationship(
-    rootRels,
-    "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties",
-    "docProps/core.xml",
-  );
-  rootRels = ensureRootRelationship(
-    rootRels,
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties",
-    "docProps/app.xml",
-  );
-
-  zip.file("[Content_Types].xml", contentTypes);
-  zip.file("_rels/.rels", rootRels);
-
-  const documentRelsEntry = zip.file("word/_rels/document.xml.rels");
-  if (documentRelsEntry) {
-    let documentRels = await documentRelsEntry.async("string");
-    documentRels = ensurePartRelationship(
-      documentRels,
-      "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles",
-      "styles.xml",
-    );
-    documentRels = ensurePartRelationship(
-      documentRels,
-      "http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings",
-      "settings.xml",
-    );
-    zip.file("word/_rels/document.xml.rels", documentRels);
-  }
-
-  zip.file(
-    "docProps/core.xml",
-    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:creator>ORAEN Tool</dc:creator><cp:lastModifiedBy>ORAEN Tool</cp:lastModifiedBy></cp:coreProperties>',
-  );
-  zip.file(
-    "docProps/app.xml",
-    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>ORAEN Tool</Application></Properties>',
-  );
-  zip.file(
-    "word/styles.xml",
-    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style></w:styles>',
-  );
-  zip.file(
-    "word/settings.xml",
-    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:compat/></w:settings>',
-  );
-
-  return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
-};
-
 const FileConversion: React.FC = () => {
   const [mode, setMode] = useState<ToolMode>("convert");
   const [convertFile, setConvertFile] = useState<File | null>(null);
@@ -327,17 +202,10 @@ const FileConversion: React.FC = () => {
 
   const targetOptions = useMemo(() => {
     if (!convertFile || sourceKind === "unknown") return [];
-    const groups = sourceKind === "image" ? imageFormats : sourceKind === "document" ? documentFormats : videoFormats;
+    const groups = sourceKind === "image" ? imageFormats : videoFormats;
     return groups
       .filter((format) => format !== sourceFormat)
-      .map((format) => {
-        const disabled = sourceFormat === "pdf" && format === "docx";
-        return {
-          value: format,
-          label: disabled ? `${formatLabel(format)}（当前不可用）` : formatLabel(format),
-          disabled,
-        };
-      });
+      .map((format) => ({ value: format, label: formatLabel(format) }));
   }, [convertFile, sourceFormat, sourceKind]);
 
   const uploadFileList: UploadFile[] = convertFile
@@ -371,7 +239,7 @@ const FileConversion: React.FC = () => {
       return false;
     }
 
-    message.success(`已识别为 ${kind === "image" ? "图片" : kind === "video" ? "视频" : "文档"} 文件`);
+    message.success(`已识别为 ${kind === "image" ? "图片" : "视频"}文件`);
     return false;
   };
 
@@ -436,26 +304,6 @@ const FileConversion: React.FC = () => {
     return new Blob([data], { type: mimeByFormat[target] || "application/octet-stream" });
   };
 
-  const convertDocument = async (file: File, target: ConvertFormat) => {
-    const { Ream, formatLoss } = await import("reamkit");
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const doc = Ream.parse(bytes);
-    const result = await doc.convertWithReport(target as ReamTarget, {
-      fileName: file.name,
-    });
-
-    if (result.losses.length) {
-      const preview = result.losses
-        .slice(0, 3)
-        .map((loss) => formatLoss(loss))
-        .join("；");
-      message.warning(`转换完成，但存在 ${result.losses.length} 项兼容损失：${preview}`);
-    }
-
-    const outputBytes = target === "docx" ? await normalizeDocxPackage(result.bytes) : result.bytes;
-    return new Blob([outputBytes], { type: mimeByFormat[target] || "application/octet-stream" });
-  };
-
   const handleConvert = async () => {
     if (!convertFile) {
       message.warning("请先选择文件");
@@ -469,19 +317,12 @@ const FileConversion: React.FC = () => {
       message.warning("请选择目标格式");
       return;
     }
-    if (sourceFormat === "pdf" && targetFormat === "docx") {
-      message.warning("PDF 转 DOCX 当前会生成 Word 无法打开的文件，已临时禁用。建议先导出 PDF，或后续接入服务端转换引擎。");
-      return;
-    }
-
     setConvertLoading(true);
     try {
       const blob =
         sourceKind === "image"
           ? await convertImage(convertFile, targetFormat)
-          : sourceKind === "video"
-          ? await convertVideo(convertFile, targetFormat)
-          : await convertDocument(convertFile, targetFormat);
+          : await convertVideo(convertFile, targetFormat);
       downloadBlob(blob, replaceExtension(convertFile.name, targetFormat));
       message.success("转换完成，文件已开始下载");
     } catch (error) {
@@ -630,7 +471,7 @@ const FileConversion: React.FC = () => {
             <SwapOutlined style={{ fontSize: 34, color: "#1677ff" }} />
             <Text strong>文件转换</Text>
             <Text type="secondary" style={{ fontSize: 12 }}>
-              图片 / 视频 / 文档
+              图片 / 视频
             </Text>
           </Card>
           <Card
@@ -660,7 +501,7 @@ const FileConversion: React.FC = () => {
                       setConvertFile(null);
                       setTargetFormat(undefined);
                     }}
-                    accept=".png,.jpg,.jpeg,.svg,.gif,.pdf,.doc,.docx,.mp4,.avi,.mkv,.mov"
+                    accept=".png,.jpg,.jpeg,.svg,.gif,.mp4,.avi,.mkv,.mov"
                   >
                     <p className="ant-upload-drag-icon">
                       <CloudUploadOutlined />
@@ -677,8 +518,6 @@ const FileConversion: React.FC = () => {
                       description={
                         sourceKind === "unknown"
                           ? "暂不支持这个格式。"
-                          : sourceKind === "document"
-                          ? "已接入 Ream 本地转换引擎，支持 PDF / DOCX / DOC 转为 PDF 或 DOCX。复杂版式可能会产生兼容损失，完成后会提示。"
                           : `已识别为 ${sourceKind === "image" ? "图片" : "视频"}，请选择目标格式后导出。`
                       }
                     />
@@ -708,12 +547,6 @@ const FileConversion: React.FC = () => {
                                 { value: "balanced", label: "平衡质量（耗时更长）" },
                                 { value: "copy", label: "仅封装转换（最快，兼容性取决于源编码）" },
                               ]}
-                            />
-                          ) : sourceKind === "document" ? (
-                            <Select
-                              value="ream"
-                              disabled
-                              options={[{ value: "ream", label: "Ream 本地转换（保留损失报告）" }]}
                             />
                           ) : (
                             <Select
@@ -757,9 +590,6 @@ const FileConversion: React.FC = () => {
                   </Paragraph>
                   <Paragraph>
                     <VideoCameraOutlined /> 视频支持 MP4、AVI、MKV、MOV 互转，首次使用会加载本地 FFmpeg WASM，较大文件会比较慢。
-                  </Paragraph>
-                  <Paragraph>
-                    <FileWordOutlined /> 文档转换接入 Ream，支持 PDF、DOCX、DOC 本地转为 PDF 或 DOCX；复杂排版会通过损失报告提示。
                   </Paragraph>
                 </Space>
               </Card>
@@ -849,7 +679,7 @@ const FileConversion: React.FC = () => {
                     DOC 旧格式无法在浏览器内安全解析，建议先转成 DOCX 后再拼接。
                   </Paragraph>
                   <Divider />
-                  <Text type="secondary">如果需要 PDF 与 Word 互转、DOC 拼接、复杂 DOCX 样式合并，建议接入后端 LibreOffice/OnlyOffice 转换服务。</Text>
+                  <Text type="secondary">复杂 DOCX 样式、页眉页脚和媒体关系可能无法完整合并，重要文档请在下载后检查。</Text>
                 </Space>
               </Card>
             </Col>

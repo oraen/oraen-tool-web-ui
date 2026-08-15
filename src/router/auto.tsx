@@ -12,6 +12,9 @@ const routes = [{
   [MENU_PATH]: "/baseUtil/textUtil",
   components: () => import("../pages/baseUtil/textUtil/index.js")
 }, {
+  [MENU_PATH]: "/baseUtil/memoUtil",
+  components: () => import("../pages/baseUtil/memoUtil/index.js")
+}, {
   [MENU_PATH]: "/baseUtil/mathUtil",
   components: () => import("../pages/baseUtil/mathUtil/index.js")
 }, {

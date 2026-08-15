@@ -9,6 +9,7 @@ type AntdMenuItem = Required<MenuProps>['items'][number];
 
 import * as layoutTypes from "@/store/layout/actionTypes";
 import { useDispatchMenu, useStateLayout, useStateMenuList, useStateOpenMenuKey, useStateSelectMenuKey } from "@/store/hooks";
+import { preloadRoute } from "@/router/preload";
 import { useStyle } from "./style";
 
 const { Sider } = Layout;
@@ -26,7 +27,18 @@ const renderMenu = (item: MenuItem, path: string): AntdMenuItem => {
     return null;
   }
   if (!item.children) {
-    return getItem(<Link to={path + item[MENU_PATH]}>{item[MENU_TITLE]}</Link>, item[MENU_KEY], <MyIcon type={item[MENU_ICON] as string} />)
+    const routePath = path + item[MENU_PATH];
+    return getItem(
+      <Link
+        to={routePath}
+        onMouseEnter={() => preloadRoute(routePath)}
+        onFocus={() => preloadRoute(routePath)}
+      >
+        {item[MENU_TITLE]}
+      </Link>,
+      item[MENU_KEY],
+      <MyIcon type={item[MENU_ICON] as string} />,
+    )
   }
   return (
     getItem(item[MENU_TITLE], item[MENU_KEY], <MyIcon type={item[MENU_ICON] as string} />, item.children.map(i => renderMenu(i, path + item[MENU_PATH])))

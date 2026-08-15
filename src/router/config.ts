@@ -27,6 +27,15 @@ export const routerConfig = [
         order: 9588,
       },
       {
+        title: "备忘录",
+        path: "/memoUtil",
+        m_id: 16,
+        parent_m_id: 1,
+        icon: null,
+        keep_alive: "false",
+        order: 3,
+      },
+      {
         title: "数学工具",
         path: "/mathUtil",
         m_id: 13,

@@ -78,7 +78,6 @@
     "react-dom": "^18.2.0",
     "react-simple-code-editor": "^0.14.1",
     "react-syntax-highlighter": "^15.6.1",
-    "reamkit": "^1.28.0",
     "vkbeautify": "^0.99.3",
     "xml-formatter": "^3.6.4",
     "xml2js": "^0.6.2"
@@ -118,7 +117,6 @@
     "split-file": "^2.3.1",
     "typescript": "^4.9.5",
     "vite": "^3.2.7",
-    "vite-plugin-monaco-editor": "^1.1.0",
-    "vite-plugin-react-router-generator": "^1.0.6"
+    "vite-plugin-monaco-editor": "^1.1.0"
   }
 }

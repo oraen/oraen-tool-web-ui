@@ -1,0 +1,123 @@
+.memo-page {
+  padding: 20px;
+
+  .memo-heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+
+    h3.ant-typography {
+      margin: 0 0 4px;
+    }
+  }
+
+  .memo-workspace {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    min-height: 560px;
+    height: calc(100vh - 220px);
+    overflow: hidden;
+    border: 1px solid;
+    border-radius: 8px;
+  }
+
+  .memo-sidebar {
+    display: flex;
+    min-width: 0;
+    padding: 12px;
+    overflow: hidden;
+    border-right: 1px solid;
+    flex-direction: column;
+  }
+
+  .memo-list {
+    min-height: 0;
+    margin-top: 12px;
+    overflow-y: auto;
+  }
+
+  .memo-list-item {
+    padding: 10px 8px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    border: 1px solid;
+    border-radius: 6px;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+
+    &:hover {
+      border-color: #1677ff !important;
+    }
+  }
+
+  .memo-list-content {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .memo-title-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .memo-title {
+    min-width: 0;
+    flex: 1;
+    user-select: none;
+  }
+
+  .memo-meta {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+  }
+
+  .memo-editor-panel {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  .memo-editor-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 56px;
+    padding: 10px 14px;
+    border-bottom: 1px solid;
+  }
+
+  .memo-editor {
+    min-height: 0;
+    flex: 1;
+  }
+
+  .memo-editor-loading,
+  .memo-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    flex-direction: column;
+  }
+}
+
+.memo-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 520px;
+}
+
+@media (max-width: 900px) {
+  .memo-page {
+    .memo-workspace {
+      grid-template-columns: 220px minmax(0, 1fr);
+    }
+  }
+}

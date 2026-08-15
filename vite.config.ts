@@ -1,12 +1,11 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import ReactRouterGenerator from "vite-plugin-react-router-generator"
 import { resolve } from "path"
-import { theme } from 'antd';
+import defaultAlgorithm from 'antd/lib/theme/themes/default';
+import defaultSeed from 'antd/lib/theme/themes/seed';
 import lessToJs from 'less-vars-to-js';
 import { readFileSync } from 'fs'
 
-const { defaultAlgorithm, defaultSeed } = theme;
 const varLessPath = "./theme/var.less"
 const mapToken = defaultAlgorithm(defaultSeed);
 const varLessStr = readFileSync(varLessPath, 'utf-8')
@@ -41,11 +40,6 @@ export default defineConfig({
     CUSTOMVARLESSDATA: `${JSON.stringify(customVarLessJson)}`
   },
   plugins: [
-    ReactRouterGenerator({
-      outputFile: resolve(".", "./src/router/auto.jsx"),
-      isLazy: true,
-      comKey: "components"
-    }),
     react(),
   ],
   resolve: {
