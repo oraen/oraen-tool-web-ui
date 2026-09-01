@@ -29,7 +29,8 @@ import {
   WarningOutlined,
 } from "@ant-design/icons";
 import { Editor } from "@monaco-editor/react";
-import memoDatabase, { MemoRecord } from "./db";
+import { useLocation } from "react-router-dom";
+import memoDatabase, { createMemoId, MemoRecord } from "./db";
 import "./index.less";
 
 const { Text, Title } = Typography;
@@ -125,8 +126,6 @@ const IMPORT_ACCEPT = Object.keys(FORMAT_BY_EXTENSION).map((extension) => `.${ex
 
 type SaveState = "saved" | "dirty" | "saving" | "error";
 
-const createMemoId = () => `memo-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-
 const formatTime = (timestamp: number) => new Intl.DateTimeFormat("zh-CN", {
   month: "2-digit",
   day: "2-digit",
@@ -136,6 +135,8 @@ const formatTime = (timestamp: number) => new Intl.DateTimeFormat("zh-CN", {
 
 const MemoUtil: React.FC = () => {
   const { token } = theme.useToken();
+  const location = useLocation();
+  const requestedMemoId = (location.state as { memoId?: string } | null)?.memoId;
   const [memos, setMemos] = useState<MemoRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -144,6 +145,9 @@ const MemoUtil: React.FC = () => {
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [activeSearchQuery, setActiveSearchQuery] = useState("");
+  const [matchedMemoIds, setMatchedMemoIds] = useState<Set<string>>(new Set());
 
   const memosRef = useRef<MemoRecord[]>([]);
   const dirtyVersionsRef = useRef(new Map<string, number>());
@@ -152,6 +156,9 @@ const MemoUtil: React.FC = () => {
   const renameCancelledRef = useRef(false);
   const saveErrorShownRef = useRef(false);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const editorRef = useRef<any>(null);
+  const searchDecorationIdsRef = useRef<string[]>([]);
+  const lastHighlightTargetRef = useRef("");
 
   const selectedMemo = useMemo(
     () => memos.find((memo) => memo.id === selectedId) || null,
@@ -225,7 +232,7 @@ const MemoUtil: React.FC = () => {
         if (!mountedRef.current) return;
         memosRef.current = records;
         setMemos(records);
-        setSelectedId(records[0]?.id || null);
+        setSelectedId(records.some((memo) => memo.id === requestedMemoId) ? requestedMemoId! : records[0]?.id || null);
       } catch (error) {
         if (!mountedRef.current) return;
         setStorageError(error instanceof Error ? error.message : "无法读取本地备忘录");
@@ -238,7 +245,7 @@ const MemoUtil: React.FC = () => {
     return () => {
       mountedRef.current = false;
     };
-  }, []);
+  }, [requestedMemoId]);
 
   useEffect(() => {
     const timer = window.setInterval(() => void flushDirtyMemos(), 3000);
@@ -449,6 +456,68 @@ const MemoUtil: React.FC = () => {
     }
   };
 
+  const clearSearchResult = useCallback(() => {
+    setActiveSearchQuery("");
+    setMatchedMemoIds(new Set());
+    lastHighlightTargetRef.current = "";
+  }, []);
+
+  const handleSearchInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setSearchInput(value);
+    if (!value.trim() || value.trim() !== activeSearchQuery) clearSearchResult();
+  };
+
+  const executeGlobalSearch = () => {
+    const query = searchInput.trim();
+    if (!query) {
+      clearSearchResult();
+      return;
+    }
+    const normalizedQuery = query.toLocaleLowerCase();
+    const matches = new Set(
+      memosRef.current
+        .filter((memo) => memo.content.toLocaleLowerCase().includes(normalizedQuery))
+        .map((memo) => memo.id),
+    );
+    setActiveSearchQuery(query);
+    setMatchedMemoIds(matches);
+  };
+
+  const applyEditorSearchHighlight = useCallback((query: string, memoId?: string) => {
+    const editor = editorRef.current;
+    const model = editor?.getModel();
+    if (!editor || !model) return;
+
+    if (!query) {
+      searchDecorationIdsRef.current = editor.deltaDecorations(searchDecorationIdsRef.current, []);
+      lastHighlightTargetRef.current = "";
+      return;
+    }
+
+    const matches = model.findMatches(query, false, false, false, null, false, 5000);
+    searchDecorationIdsRef.current = editor.deltaDecorations(
+      searchDecorationIdsRef.current,
+      matches.map((match: { range: any }) => ({
+        range: match.range,
+        options: { inlineClassName: "memo-search-match" },
+      })),
+    );
+
+    const target = `${memoId || ""}\u0000${query}`;
+    if (matches.length && lastHighlightTargetRef.current !== target) {
+      editor.revealRangeInCenter(matches[0].range);
+    }
+    lastHighlightTargetRef.current = target;
+  }, []);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      applyEditorSearchHighlight(activeSearchQuery, selectedMemo?.id);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeSearchQuery, applyEditorSearchHighlight, selectedMemo?.content, selectedMemo?.id]);
+
   const saveStatus = {
     saved: { icon: <CheckCircleOutlined />, text: "已保存到本地", color: token.colorSuccess },
     dirty: { icon: <FileTextOutlined />, text: "等待自动保存", color: token.colorWarning },
@@ -503,12 +572,13 @@ const MemoUtil: React.FC = () => {
             renderItem={(memo) => {
               const selected = memo.id === selectedId;
               const dirty = dirtyVersionsRef.current.has(memo.id);
+              const searchMatched = matchedMemoIds.has(memo.id);
               return (
                 <List.Item
                   className={`memo-list-item${selected ? " selected" : ""}`}
                   style={{
-                    background: selected ? token.colorPrimaryBg : undefined,
-                    borderColor: token.colorBorderSecondary,
+                    background: searchMatched ? token.colorWarningBg : selected ? token.colorPrimaryBg : undefined,
+                    borderColor: selected ? token.colorPrimary : token.colorBorderSecondary,
                   }}
                   onClick={() => setSelectedId(memo.id)}
                 >
@@ -607,6 +677,14 @@ const MemoUtil: React.FC = () => {
                   >
                     导入
                   </Button>
+                  <Input
+                    allowClear
+                    value={searchInput}
+                    placeholder="全局搜索"
+                    style={{ width: 220 }}
+                    onChange={handleSearchInputChange}
+                    onPressEnter={executeGlobalSearch}
+                  />
                   <input
                     ref={importInputRef}
                     type="file"
@@ -622,6 +700,30 @@ const MemoUtil: React.FC = () => {
               <div className="memo-editor">
                 <Editor
                   path={`memo-${selectedMemo.id}`}
+                  onMount={(editor) => {
+                    editorRef.current = editor;
+                    searchDecorationIdsRef.current = [];
+
+                    // Monaco's delayed hover for the find widget close button can be placed
+                    // over the button in a constrained editor, causing a hover/click loop.
+                    // Suppress only that tooltip; the button and its aria label remain intact.
+                    const editorDomNode = editor.getDomNode();
+                    const preventFindCloseHover = (event: MouseEvent) => {
+                      const target = event.target;
+                      if (target instanceof Element
+                        && target.closest(".find-widget > .button.codicon-widget-close")) {
+                        event.stopPropagation();
+                      }
+                    };
+                    editorDomNode?.addEventListener("mouseover", preventFindCloseHover, true);
+                    editor.onDidDispose(() => {
+                      editorDomNode?.removeEventListener("mouseover", preventFindCloseHover, true);
+                    });
+
+                    window.requestAnimationFrame(() => {
+                      applyEditorSearchHighlight(activeSearchQuery, selectedMemo.id);
+                    });
+                  }}
                   height="100%"
                   language={MONACO_LANGUAGE[selectedMemo.language] || selectedMemo.language}
                   value={selectedMemo.content}

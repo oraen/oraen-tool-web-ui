@@ -1,9 +1,13 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {Input, Button, Row, Col, Card, Space, message, Modal} from 'antd';
+import {Input, Button, Row, Col, Card, Space, message, Modal, notification} from 'antd';
+import { SaveOutlined } from '@ant-design/icons';
 import { isJson, isXml, isSql, isCsv, formatJson, formatXml, formatSql, formatCsv } from '../../../common/common';
 import {Editor} from "@monaco-editor/react";
 import { Typography } from 'antd';
 import { useTextUtil } from '@/store/textUtil/hooks';
+import { useNavigate } from 'react-router-dom';
+import memoDatabase, { createMemoId } from '@/pages/baseUtil/memoUtil/db';
+import type { MemoRecord } from '@/pages/baseUtil/memoUtil/db';
 
 const { Text } = Typography; // 解构出 Text 组件
 
@@ -22,6 +26,8 @@ const placeholderText =
 const TextUtil: React.FC = () => {
   // 使用 Redux 管理文本内容，实现跨页面持久化
   const { inputText, setText } = useTextUtil();
+  const navigate = useNavigate();
+  const [savingToMemo, setSavingToMemo] = useState(false);
 
   const editorRef = useRef<any>(null); // 用于获取 TextArea 的 DOM 元素
   const [hintText, setHintText] = useState('');
@@ -820,6 +826,50 @@ const TextUtil: React.FC = () => {
     updateText('');
   };
 
+  const handleSaveToMemo = async () => {
+    if (savingToMemo) return;
+    setSavingToMemo(true);
+    const now = Date.now();
+    const language = isJson(inputText)
+      ? 'json'
+      : isXml(inputText)
+        ? 'xml'
+        : isSql(inputText)
+          ? 'sql'
+          : isCsv(inputText)
+            ? 'csv'
+            : 'text';
+    const memo: MemoRecord = {
+      id: createMemoId(),
+      title: `wb-${now}`,
+      content: inputText,
+      language,
+      locked: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    try {
+      await memoDatabase.saveMany([memo]);
+      const notificationKey = `saved-memo-${memo.id}`;
+      notification.success({
+        key: notificationKey,
+        message: '保存成功，点击进入备忘录',
+        description: memo.title,
+        duration: 3,
+        style: { cursor: 'pointer' },
+        onClick: () => {
+          notification.destroy(notificationKey);
+          navigate('/baseUtil/memoUtil', { state: { memoId: memo.id } });
+        },
+      });
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '保存到备忘录失败');
+    } finally {
+      setSavingToMemo(false);
+    }
+  };
+
   const onChangeText = (newStr: string) => {
     setText(newStr);
     let trim = newStr.trim()
@@ -850,6 +900,7 @@ const TextUtil: React.FC = () => {
                 <Button type="primary" style={{backgroundColor: '#1890ff'}}
                         onClick={handleCopyToClipboard}>复制内容</Button>
                 <Button type="primary" style={{backgroundColor: '#ff4d4f'}} onClick={handleClearText}>清空内容</Button>
+                <Button icon={<SaveOutlined />} loading={savingToMemo} onClick={handleSaveToMemo}>保存内容</Button>
               </Space>
               <Text strong style={{fontWeight: 'bold'}}>字符数量：{inputText.length}</Text> {/* 靠右对齐并加粗 */}
             </div>

@@ -12,6 +12,8 @@ const DB_NAME = "ORAEN_MEMO";
 const DB_VERSION = 1;
 const STORE_NAME = "memos";
 
+export const createMemoId = () => `memo-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
 class MemoDatabase {
   private db: IDBDatabase | null = null;
   private initPromise: Promise<IDBDatabase> | null = null;

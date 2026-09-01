@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import Error from "@/pages/err"
 import loadable from "@loadable/component"
 import { Spin } from "antd";
+import { loadRouteWithChunkRecovery } from "./chunkRecovery";
 type LoadingComponent = () => Promise<React.ReactNode>
 export interface RouterInfo {
   components: LoadingComponent | React.ReactNode
@@ -48,7 +49,10 @@ const fellbackStyle = {
 };
 auto.forEach(item => {
   const { components, ...anyProps } = item
-  const Com = loadable(item.components, { fallback: <Spin style={fellbackStyle} tip="页面加载中...." /> })
+  const Com = loadable(
+    () => loadRouteWithChunkRecovery(components),
+    { fallback: <Spin style={fellbackStyle} tip="页面加载中...." /> },
+  )
   const info = { ...anyProps, components: <Com /> }
   autoList.push(info)
 })

@@ -12,8 +12,11 @@ const varLessStr = readFileSync(varLessPath, 'utf-8')
 const customVarLessJson = lessToJs(varLessStr, { resolveVariables: true, stripPrefix: true });
 
 // https://vitejs.dev/config/
-export default defineConfig({
-  base: "",
+export default defineConfig(({ mode }) => ({
+  // Web deployments need root-relative assets so history-route fallbacks such as
+  // /baseUtil/textUtil do not resolve scripts under /baseUtil/assets. Electron
+  // still needs relative assets because it loads index.html through file://.
+  base: mode === 'electron' ? './' : '/',
   build: {
     outDir: "oraen-tool-web-ui",
     target: 'esnext', // you can also use 'es2020' here
@@ -62,4 +65,4 @@ export default defineConfig({
     host: true
   },
   envPrefix: "REACT_APP_",
-})
+}))
