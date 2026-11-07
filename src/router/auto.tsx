@@ -3,6 +3,18 @@
 
 
 const routes = [{
+  [MENU_PATH]: "/fileUtil/imageBatch",
+  components: () => import("../pages/fileUtil/imageBatch/index.js")
+}, {
+  [MENU_PATH]: "/fileUtil/pdfManager",
+  components: () => import("../pages/fileUtil/pdfManager/index.js")
+}, {
+  [MENU_PATH]: "/fileUtil/zipTool",
+  components: () => import("../pages/fileUtil/zipTool/index.js")
+}, {
+  [MENU_PATH]: "/professionalUtil/markdownUtil",
+  components: () => import("../pages/professionalUtil/markdownUtil/index.js")
+}, {
   [MENU_PATH]: "/about/overview",
   components: () => import("../pages/about/overview/index.js")
 }, {

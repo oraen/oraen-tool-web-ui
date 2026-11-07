@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+/public/pdfjs/
 /.pnp
 .pnp.js
 yarn.lock
@@ -32,3 +33,5 @@ yarn-debug.log*
 yarn-error.log*
 
 
+
+/public/plantuml/

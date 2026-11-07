@@ -88,7 +88,10 @@ export const routerConfig = [
         parent_m_id: 4,
         keep_alive: "false",
         order: 2,
-      }
+      },
+      { title: "图片批量处理", path: "/imageBatch", m_id: 43, parent_m_id: 4, icon: null, keep_alive: "false", order: 3 },
+      { title: "PDF 页面管理", path: "/pdfManager", m_id: 44, parent_m_id: 4, icon: null, keep_alive: "false", order: 4 },
+      { title: "ZIP 压缩包", path: "/zipTool", m_id: 45, parent_m_id: 4, icon: null, keep_alive: "false", order: 5 }
     ],
   },
   {
@@ -126,6 +129,15 @@ export const routerConfig = [
         icon: null,
         keep_alive: "false",
         order: 3,
+      },
+      {
+        title: "Markdown",
+        path: "/markdownUtil",
+        m_id: 64,
+        parent_m_id: 6,
+        icon: null,
+        keep_alive: "false",
+        order: 4,
       }
     ],
   },

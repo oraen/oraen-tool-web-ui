@@ -24,8 +24,14 @@ export default defineConfig(({ mode }) => ({
   optimizeDeps: {
     esbuildOptions: {
       target: 'esnext', // you can also use 'es2020' here
+      // Vite 3's esbuild must lower static blocks together with private fields for PDF.js.
+      supported: { 'class-static-blocks': false },
     },
   },
+  esbuild: { supported: { 'class-static-blocks': false } },
+  // Graphviz locates its runtime with import.meta.url inside a module worker.
+  // IIFE workers rewrite that URL through document, which is unavailable there.
+  worker: { format: 'es' },
   define: {
     MENU_PATH: `"path"`,
     MENU_SHOW: `"show"`,

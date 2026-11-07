@@ -1,0 +1,64 @@
+.md-export-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 20px;
+  height: min(65vh, 680px);
+  min-height: 360px;
+}
+.md-export-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  padding-right: 6px;
+  > label {
+    font-size: 12px;
+    font-weight: 550;
+    margin-top: 4px;
+  }
+  .ant-select,
+  .ant-input-number {
+    width: 100%;
+  }
+  .ant-alert {
+    margin-top: 10px;
+  }
+}
+.md-export-preview {
+  border: 1px solid #8883;
+  border-radius: 8px;
+  overflow: hidden;
+  min-width: 0;
+  iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: white;
+  }
+  pre {
+    margin: 0;
+    height: 100%;
+    padding: 20px;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font:
+      13px/1.8 Consolas,
+      "Microsoft YaHei",
+      monospace;
+  }
+}
+.md-export-status {
+  font-size: 12px;
+  line-height: 1.8;
+  margin: 0;
+}
+@media (max-width: 760px) {
+  .md-export-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .md-export-preview {
+    height: 360px;
+  }
+}

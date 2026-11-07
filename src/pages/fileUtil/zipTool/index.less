@@ -1,0 +1,79 @@
+.zip-tool {
+  .zip-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 0 20px;
+    span {
+      color: var(--tool-muted);
+      font-size: 12px;
+    }
+  }
+  .zip-workspace {
+    display: grid;
+    grid-template-columns: 230px minmax(0, 1fr);
+    border: 1px solid var(--tool-border);
+    border-radius: 8px;
+    overflow: hidden;
+    min-height: 380px;
+    > aside {
+      background: var(--tool-fill);
+      padding: 14px 8px;
+      border-right: 1px solid var(--tool-border);
+      overflow: auto;
+      max-height: 650px;
+      .ant-tree {
+        background: transparent;
+      }
+    }
+  }
+  .zip-entries {
+    padding: 16px;
+    min-width: 0;
+  }
+  .zip-file-link {
+    border: 0;
+    background: none;
+    color: var(--tool-accent);
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+  .zip-create-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+    > .ant-input-group-wrapper {
+      max-width: 300px;
+    }
+    .ant-select {
+      min-width: 230px;
+    }
+  }
+  @media (max-width: 900px) {
+    .zip-workspace {
+      grid-template-columns: 1fr;
+      > aside {
+        max-height: 180px;
+        border-right: 0;
+        border-bottom: 1px solid var(--tool-border);
+      }
+    }
+  }
+}
+.zip-text-preview {
+  max-height: 60vh;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid #8883;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font:
+    13px/1.8 Consolas,
+    "Microsoft YaHei",
+    monospace;
+}

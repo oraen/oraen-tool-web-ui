@@ -52,7 +52,7 @@ app.whenReady().then(() => {
     try {
       const ownerWindow = BrowserWindow.fromWebContents(event.sender);
       const result = await dialog.showSaveDialog(ownerWindow, {
-        title: '保存备忘录',
+        title: typeof options?.title === 'string' ? options.title : '保存备忘录',
         defaultPath: options?.defaultPath || '备忘录.txt',
         filters: Array.isArray(options?.filters) ? options.filters : [{ name: '文本文件', extensions: ['txt'] }],
       });
